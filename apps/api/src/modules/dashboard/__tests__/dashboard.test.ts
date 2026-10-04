@@ -180,6 +180,12 @@ describe('dispatcher dashboard', () => {
       reason: 'Store closed',
       action: { href: `/api/v1/stops/${seed.failedStopId}` },
     });
+    expect(body.items.find((item) => item.type === 'late_delivery')).toMatchObject({
+      severity: 'medium',
+      entityType: 'stop',
+      entityId: seed.lateStopId,
+      title: 'Late arrival',
+    });
     expect(conflict).toMatchObject({
       severity: 'medium',
       entityType: 'sync_conflict',
@@ -401,7 +407,15 @@ describe('dispatcher dashboard', () => {
     const loadingTrip = await insertTrip(db, todayRun, 'VEH803', 1, 'loading');
     const staleTrip = await insertTrip(db, todayRun, 'VEH801', 2, 'departed');
 
-    const deliveredStop = await insertStop(db, liveTrip, deliveredOrder, 1, 'delivered', EARLY);
+    const deliveredStop = await insertStop(
+      db,
+      liveTrip,
+      deliveredOrder,
+      1,
+      'delivered',
+      EARLY,
+      true,
+    );
     const failedStop = await insertStop(db, liveTrip, failedOrder, 2, 'failed', EARLY);
     await insertStop(db, loadingTrip, allocatedOrder, 1, 'pending', TIGHT);
     const staleStop = await insertStop(db, staleTrip, dispatchedOrder, 1, 'arrived', EARLY);
@@ -508,6 +522,7 @@ describe('dispatcher dashboard', () => {
       loadingIssueId: loadingIssue.id,
       loadingTripId: loadingTrip,
       failedStopId: failedStop,
+      lateStopId: deliveredStop,
       conflictId: conflict.id,
       liveTripId: liveTrip,
       staleTripId: staleTrip,
@@ -521,6 +536,7 @@ interface Seed {
   loadingIssueId: string;
   loadingTripId: string;
   failedStopId: string;
+  lateStopId: string;
   conflictId: string;
   liveTripId: string;
   staleTripId: string;
@@ -705,11 +721,12 @@ async function insertStop(
   seq: number,
   status: 'pending' | 'arrived' | 'delivered' | 'failed',
   plannedArrival: string,
+  late = false,
 ) {
   return first(
     await db
       .insert(tripStops)
-      .values({ tripId, orderId, seq, status, plannedArrival: new Date(plannedArrival) })
+      .values({ tripId, orderId, seq, status, plannedArrival: new Date(plannedArrival), late })
       .returning({ id: tripStops.id }),
     'stop',
   ).id;

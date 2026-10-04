@@ -392,7 +392,7 @@ async function rejectDuplicate(
   if (existing === null) return;
   throw new ApiError(
     'VALIDATION_ERROR',
-    `This outlet already has a ${slot.temp} order for ${slot.requestedDate}`,
+    `This outlet already has ${slot.temp === 'ambient' ? 'an' : 'a'} ${slot.temp} order for ${slot.requestedDate}`,
   );
 }
 

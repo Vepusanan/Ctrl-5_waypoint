@@ -194,6 +194,23 @@ function toExceptions(day: DaySnapshot, date: string, now: Date): DashboardExcep
       }),
     );
   }
+  // An arrival after the window closed is an observed fact, not a prediction (SRS §42).
+  for (const stop of day.stops) {
+    if (!stop.late || stop.status === 'failed') continue;
+    const arrived = latestEvent(day.events, stop.id, 'arrived');
+    items.push(
+      exception({
+        severity: 'medium',
+        type: 'late_delivery',
+        entityType: 'stop',
+        entityId: stop.id,
+        title: 'Late arrival',
+        reason: `Arrived after the window closed at ${stop.windowClose.slice(0, 5)}`,
+        occurredAt: arrived?.serverTime ?? stop.plannedArrival,
+        href: `/api/v1/stops/${stop.id}`,
+      }),
+    );
+  }
   for (const issue of day.issues) {
     items.push(
       exception({

@@ -49,6 +49,7 @@ const commandActionKindSchema = z.enum([
   'outlets_unconfirmed',
   'loading_shortfall',
   'failed_delivery',
+  'late_delivery',
   'receipt_discrepancy',
   'sync_conflict',
   'vehicle_unavailable',

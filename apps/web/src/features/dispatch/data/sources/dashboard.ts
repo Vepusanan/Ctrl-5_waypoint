@@ -32,6 +32,7 @@ const percent = (ratio: number) => Math.round(ratio * 100);
 const LIVE: readonly DashboardException['type'][] = [
   'loading_shortfall',
   'failed_delivery',
+  'late_delivery',
   'receipt_discrepancy',
   'sync_conflict',
   'stale_driver',

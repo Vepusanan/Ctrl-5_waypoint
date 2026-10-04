@@ -25,6 +25,6 @@
       "entry": ["test/**/*.test.ts"],
       "project": ["src/**/*.ts", "test/**/*.ts"]
     },
-    "e2e": {}
+    "e2e": { "entry": ["global-setup.ts"] }
   }
 }

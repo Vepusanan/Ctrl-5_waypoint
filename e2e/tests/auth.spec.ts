@@ -127,7 +127,12 @@ test('expired session clears the workspace; logout failure keeps the session vis
   await expect(page.getByRole('alert')).toContainText('The server could not complete');
   await expect(page).toHaveURL(/\/driver\/account$/);
   expired = true;
-  await page.getByRole('link', { name: 'Notices' }).click();
+  // Any request now answers 401. A background poll can sign the driver out before this click
+  // lands, which detaches the link, so the click is only a trigger and may find nothing to press.
+  await page
+    .getByRole('link', { name: 'Notices' })
+    .click({ timeout: 5_000 })
+    .catch(() => undefined);
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByText('Test Driver')).toHaveCount(0);
 });

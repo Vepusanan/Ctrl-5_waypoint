@@ -85,6 +85,7 @@ export interface StopFact {
   seq: number;
   status: StopStatus;
   plannedArrival: Date;
+  late: boolean;
   windowClose: string;
   mallWindowClose: string | null;
 }
@@ -406,6 +407,7 @@ async function listStops(db: Database, tripScope: SQL, date: string): Promise<St
       seq: tripStops.seq,
       status: tripStops.status,
       plannedArrival: tripStops.plannedArrival,
+      late: tripStops.late,
       windowClose: outlets.windowClose,
       mallWindowClose: outlets.mallWindowClose,
     })

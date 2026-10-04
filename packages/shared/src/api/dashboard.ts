@@ -103,6 +103,7 @@ export type DashboardExceptionSeverity = z.infer<typeof dashboardExceptionSeveri
 export const dashboardExceptionTypeSchema = z.enum([
   'loading_shortfall',
   'failed_delivery',
+  'late_delivery',
   'receipt_discrepancy',
   'sync_conflict',
   'vehicle_unavailable',
