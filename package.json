@@ -26,6 +26,8 @@
     "@biomejs/biome": "2.5.15",
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
+    "@neon/config": "^1.8.3",
+    "@neon/env": "^1.5.0",
     "@types/node": "catalog:",
     "husky": "^9.1.7",
     "knip": "^6.39.0",

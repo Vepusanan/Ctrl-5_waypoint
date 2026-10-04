@@ -1,0 +1,22 @@
+# Render blueprint: one free web service that serves the web app and the API together.
+# The database is external (Neon): paste its connection string as DATABASE_URL when asked.
+services:
+  - type: web
+    name: waypoint
+    runtime: docker
+    plan: free
+    dockerfilePath: ./infra/single.Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DEMO_MODE
+        value: "true"
+      - key: SEED_PASSWORD
+        sync: false
+      # Every visitor arrives through the platform's proxy, so they share one address.
+      - key: LOGIN_RATE_LIMIT
+        value: "120"
