@@ -1,6 +1,6 @@
 import type { Database } from '@waypoint/database';
 import type { Role, User } from '@waypoint/shared';
-import type { preHandlerHookHandler } from 'fastify';
+import type { preValidationHookHandler } from 'fastify';
 import type { AuthService } from '../modules/auth/service.ts';
 import type { AuditRecorder } from '../plugins/audit.ts';
 import type { OperatingClock } from '../plugins/clock.ts';
@@ -16,7 +16,8 @@ declare module 'fastify' {
     domainEvents: DomainEventBus;
     authService: AuthService;
     secureCookies: boolean;
-    requireRole: (...roles: [Role, ...Role[]]) => preHandlerHookHandler;
+    /** Runs before request validation, so a caller without access learns nothing of the schema. */
+    requireRole: (...roles: [Role, ...Role[]]) => preValidationHookHandler;
   }
 
   interface FastifyRequest {

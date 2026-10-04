@@ -29,7 +29,7 @@ export const deliveryRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/stops/:id',
     {
-      preHandler: app.requireRole(...readRoles),
+      preValidation: app.requireRole(...readRoles),
       schema: {
         tags: ['deliveries'],
         params: idParamsSchema,
@@ -49,7 +49,7 @@ export const deliveryRoutes: FastifyPluginAsyncZod = async (app) => {
     app.get(
       `/stops/:id/pod/${kind}`,
       {
-        preHandler: app.requireRole('dispatcher', 'driver', 'store_manager'),
+        preValidation: app.requireRole('dispatcher', 'driver', 'store_manager'),
         schema: {
           tags: ['deliveries'],
           params: idParamsSchema,
@@ -69,7 +69,7 @@ export const deliveryRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/stops/:id/events',
     {
-      preHandler: app.requireRole('driver'),
+      preValidation: app.requireRole('driver'),
       schema: {
         tags: ['deliveries'],
         params: idParamsSchema,
@@ -96,7 +96,7 @@ export const deliveryRoutes: FastifyPluginAsyncZod = async (app) => {
     {
       // Two images, each under the 2 MB file limit, plus multipart framing.
       bodyLimit: MAX_POD_BODY_BYTES,
-      preHandler: app.requireRole('driver'),
+      preValidation: app.requireRole('driver'),
       schema: {
         tags: ['deliveries'],
         params: idParamsSchema,

@@ -15,6 +15,9 @@ export const users = pgTable(
     outletId: text('outlet_id').references(() => outlets.id),
     depotId: text('depot_id').references(() => depots.id),
     vehicleId: text('vehicle_id').references(() => vehicles.id),
+    // Set when the account is deactivated. Users are never deleted: orders, deliveries and the
+    // audit log refer to them. A deactivated user cannot sign in or keep a session.
+    disabledAt: eventTimestamp('disabled_at'),
   },
   (table) => [
     index('users_outlet_id').on(table.outletId),

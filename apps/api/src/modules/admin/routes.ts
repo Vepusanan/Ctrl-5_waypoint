@@ -17,7 +17,7 @@ export function adminRoutes(seed: DemoSeedConfig): FastifyPluginAsyncZod {
     app.get(
       '/admin/clock',
       {
-        preHandler: app.requireRole('dispatcher', 'driver'),
+        preValidation: app.requireRole('dispatcher', 'driver'),
         schema: {
           tags: ['admin'],
           response: {
@@ -33,7 +33,7 @@ export function adminRoutes(seed: DemoSeedConfig): FastifyPluginAsyncZod {
     app.put(
       '/admin/clock',
       {
-        preHandler: app.requireRole('dispatcher'),
+        preValidation: app.requireRole('dispatcher'),
         schema: {
           tags: ['admin'],
           body: operatingClockSchema,
@@ -56,7 +56,7 @@ export function adminRoutes(seed: DemoSeedConfig): FastifyPluginAsyncZod {
     app.post(
       '/admin/reset',
       {
-        preHandler: app.requireRole('dispatcher'),
+        preValidation: app.requireRole('dispatcher'),
         schema: {
           tags: ['admin'],
           body: seedResetRequestSchema,

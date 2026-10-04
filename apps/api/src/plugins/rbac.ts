@@ -1,7 +1,7 @@
 import { orders, outlets, tripStops, trips, vehicles } from '@waypoint/database';
 import type { Role, User } from '@waypoint/shared';
 import { eq, type SQL, sql } from 'drizzle-orm';
-import type { preHandlerHookHandler } from 'fastify';
+import type { preValidationHookHandler } from 'fastify';
 import fp from 'fastify-plugin';
 import { ApiError } from './errors.ts';
 
@@ -67,7 +67,7 @@ export function everyRole(): [Role, ...Role[]] {
 
 export const rbacPlugin = fp(
   async (app) => {
-    const requireRole = (...roles: [Role, ...Role[]]): preHandlerHookHandler => {
+    const requireRole = (...roles: [Role, ...Role[]]): preValidationHookHandler => {
       return async (request) => {
         const user = request.user;
         if (user === null) {

@@ -18,7 +18,7 @@ export const tripRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/trips',
     {
-      preHandler: app.requireRole(...readRoles),
+      preValidation: app.requireRole(...readRoles),
       schema: {
         tags: ['trips'],
         querystring: listTripsQuerySchema,
@@ -36,7 +36,7 @@ export const tripRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/trips/:id',
     {
-      preHandler: app.requireRole(...readRoles),
+      preValidation: app.requireRole(...readRoles),
       schema: {
         tags: ['trips'],
         params: idParamsSchema,
@@ -55,7 +55,7 @@ export const tripRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/trips/:id/resequence',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['trips'],
         params: idParamsSchema,
@@ -84,7 +84,7 @@ export const tripRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/trips/:id/depart',
     {
-      preHandler: app.requireRole(...readRoles),
+      preValidation: app.requireRole(...readRoles),
       schema: {
         tags: ['trips'],
         params: idParamsSchema,

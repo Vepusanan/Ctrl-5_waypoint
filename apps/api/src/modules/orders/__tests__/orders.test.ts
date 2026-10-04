@@ -1,4 +1,4 @@
-import { auditLog, calendarDays, orders, users } from '@waypoint/database';
+import { auditLog, calendarDays, orders, outlets, users } from '@waypoint/database';
 import {
   currentUserResponseSchema,
   type Order,
@@ -327,6 +327,39 @@ describe('orders', () => {
       ).json(),
     );
     expect(list.total).toBe(2);
+  });
+
+  it('accepts chilled orders from Waypoint Fresh outlets only', async () => {
+    // BR-020: only Fresh has chilled demand. The sibling outlet trades as Style for this test.
+    await database.db.update(outlets).set({ brand: 'Style' }).where(eq(outlets.id, 'OUT003'));
+    try {
+      const style = await login(SIBLING_EMAIL);
+      const chilled = await app.inject({
+        method: 'POST',
+        url: '/api/v1/orders',
+        headers: { cookie: style.cookie },
+        payload: baseOrder({ temp: 'chilled' }),
+      });
+      expectError(chilled, 400, 'VALIDATION_ERROR');
+      expect(chilled.json()).toMatchObject({
+        error: { message: 'Only Waypoint Fresh outlets can order chilled goods' },
+      });
+
+      const ambient = await createdOrder(style.cookie, { temp: 'ambient' });
+      expect(ambient.brand).toBe('Style');
+      // An edit cannot turn the order chilled either.
+      expectError(
+        await patch(style.cookie, ambient.id, ambient.version, { temp: 'chilled' }),
+        400,
+        'VALIDATION_ERROR',
+      );
+      const stored = await database.db.select().from(orders).where(eq(orders.id, ambient.id));
+      expect(stored[0]?.temp).toBe('ambient');
+      expect(await database.db.select().from(orders).where(eq(orders.temp, 'chilled'))).toEqual([]);
+    } finally {
+      await database.db.delete(orders).where(eq(orders.outletId, 'OUT003'));
+      await database.db.update(outlets).set({ brand: 'Fresh' }).where(eq(outlets.id, 'OUT003'));
+    }
   });
 
   it('cancels an order before it is locked', async () => {

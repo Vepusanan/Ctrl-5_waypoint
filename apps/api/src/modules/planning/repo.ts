@@ -307,6 +307,15 @@ export function createPlanningRepo(): PlanningRepo {
                   where ${deferrals.orderId} = ${orders.id}
                     and ${planningRuns.serviceDate} >= ${serviceDate}
                 )`,
+                // It is carried by every later run until one serves it. Once another run's draft
+                // holds it, it is that run's order: an order has one stop.
+                sql`not exists (
+                  select 1 from ${tripStops}
+                  inner join ${trips} on ${trips.id} = ${tripStops.tripId}
+                  inner join ${planningRuns} on ${planningRuns.id} = ${trips.runId}
+                  where ${tripStops.orderId} = ${orders.id}
+                    and ${planningRuns.serviceDate} <> ${serviceDate}
+                )`,
               ),
             ),
             eq(outlets.depotId, depotId),

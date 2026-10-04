@@ -20,7 +20,7 @@ export const receiptRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/stops/:id/receipt',
     {
-      preHandler: app.requireRole('store_manager'),
+      preValidation: app.requireRole('store_manager'),
       schema: {
         tags: ['receipts'],
         params: idParamsSchema,
@@ -44,7 +44,7 @@ export const receiptRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/issues',
     {
-      preHandler: app.requireRole('store_manager'),
+      preValidation: app.requireRole('store_manager'),
       schema: {
         tags: ['receipts'],
         body: createIssueRequestSchema,
@@ -66,7 +66,7 @@ export const receiptRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/issues',
     {
-      preHandler: app.requireRole(...readRoles),
+      preValidation: app.requireRole(...readRoles),
       schema: {
         tags: ['receipts'],
         response: {
@@ -82,7 +82,7 @@ export const receiptRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/issues/:id',
     {
-      preHandler: app.requireRole(...readRoles),
+      preValidation: app.requireRole(...readRoles),
       schema: {
         tags: ['receipts'],
         params: idParamsSchema,
@@ -101,7 +101,7 @@ export const receiptRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/issues/:id/resolve',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['receipts'],
         params: idParamsSchema,

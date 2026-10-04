@@ -14,7 +14,7 @@ export const notificationRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/notifications',
     {
-      preHandler: app.requireRole(...everyRole()),
+      preValidation: app.requireRole(...everyRole()),
       schema: {
         tags: ['notifications'],
         response: {
@@ -30,7 +30,7 @@ export const notificationRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/notifications/:id/read',
     {
-      preHandler: app.requireRole(...everyRole()),
+      preValidation: app.requireRole(...everyRole()),
       schema: {
         tags: ['notifications'],
         params: idParamsSchema,
@@ -49,7 +49,7 @@ export const notificationRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/notifications/:id/acknowledge',
     {
-      preHandler: app.requireRole(...everyRole()),
+      preValidation: app.requireRole(...everyRole()),
       schema: {
         tags: ['notifications'],
         params: idParamsSchema,

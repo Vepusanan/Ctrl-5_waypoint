@@ -17,7 +17,7 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/store/workspace',
     {
-      preHandler: app.requireRole('store_manager'),
+      preValidation: app.requireRole('store_manager'),
       schema: { tags: ['store'], response: { 200: storeWorkspaceSchema, ...errors } },
     },
     (request) => service.workspace(request.user),
@@ -25,7 +25,7 @@ export const storeRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/store/orders/:id',
     {
-      preHandler: app.requireRole('store_manager'),
+      preValidation: app.requireRole('store_manager'),
       schema: {
         tags: ['store'],
         params: idParamsSchema,

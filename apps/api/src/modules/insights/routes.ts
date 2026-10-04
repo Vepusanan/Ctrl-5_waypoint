@@ -19,7 +19,7 @@ export const insightRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/analytics/demand',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['insights'],
         querystring: demandQuerySchema,
@@ -32,7 +32,7 @@ export const insightRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/outlets/history',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: { tags: ['insights'], response: { 200: outletHistoryListSchema, ...errors } },
     },
     async (request) => service.outletHistory(request.user),
@@ -41,7 +41,7 @@ export const insightRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/outlets/:id/profile',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['insights'],
         params: z.object({ id: outletIdSchema }),

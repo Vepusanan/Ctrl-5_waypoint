@@ -18,7 +18,7 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/trips/:id/loading',
     {
-      preHandler: app.requireRole(...readRoles),
+      preValidation: app.requireRole(...readRoles),
       schema: {
         tags: ['loading'],
         params: idParamsSchema,
@@ -37,7 +37,7 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/trips/:id/loading/start',
     {
-      preHandler: app.requireRole('loader'),
+      preValidation: app.requireRole('loader'),
       schema: {
         tags: ['loading'],
         params: idParamsSchema,
@@ -66,7 +66,7 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/trips/:id/loading/verify',
     {
-      preHandler: app.requireRole('loader'),
+      preValidation: app.requireRole('loader'),
       schema: {
         tags: ['loading'],
         params: idParamsSchema,
@@ -88,7 +88,7 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     '/trips/:id/loading/counts',
     {
-      preHandler: app.requireRole('loader'),
+      preValidation: app.requireRole('loader'),
       schema: {
         tags: ['loading'],
         params: idParamsSchema,
@@ -109,7 +109,7 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/trips/:id/loading/issues',
     {
-      preHandler: app.requireRole('loader'),
+      preValidation: app.requireRole('loader'),
       schema: {
         tags: ['loading'],
         params: idParamsSchema,
@@ -140,7 +140,7 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/loading/issues/:id/ack',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['loading'],
         params: idParamsSchema,
@@ -160,7 +160,7 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/trips/:id/loading/ready',
     {
-      preHandler: app.requireRole('loader'),
+      preValidation: app.requireRole('loader'),
       schema: {
         tags: ['loading'],
         params: idParamsSchema,

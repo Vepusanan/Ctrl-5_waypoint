@@ -37,7 +37,7 @@ describe('RBAC', () => {
     app.get(
       '/api/v1/probes/orders/:id',
       {
-        preHandler: app.requireRole('dispatcher', 'loader', 'driver', 'store_manager'),
+        preValidation: app.requireRole('dispatcher', 'loader', 'driver', 'store_manager'),
         schema: { params: orderParams, response: { 200: orderBody } },
       },
       async (request) => {
@@ -51,7 +51,7 @@ describe('RBAC', () => {
 
     app.get(
       '/api/v1/probes/dispatcher',
-      { preHandler: app.requireRole('dispatcher') },
+      { preValidation: app.requireRole('dispatcher') },
       async () => ({ ok: true }),
     );
   });
@@ -86,6 +86,39 @@ describe('RBAC', () => {
       headers: { cookie: dispatcher },
     });
     expect(allowed.statusCode).toBe(200);
+  });
+
+  it('checks the session and role before it validates the request', async () => {
+    // A malformed request must not tell a caller without access what the endpoint expects.
+    const invalid = [
+      { method: 'POST', url: '/api/v1/orders', payload: { units: 'many' } },
+      { method: 'GET', url: '/api/v1/orders/not-a-uuid' },
+      { method: 'POST', url: '/api/v1/planning/runs/tomorrow/publish' },
+      { method: 'POST', url: '/api/v1/deferrals', payload: {} },
+      { method: 'POST', url: '/api/v1/sync/events', payload: { events: 'none' } },
+    ] as const;
+    const driver = await login(app, fixture.emails.driver, fixture.password);
+    const loader = await login(app, fixture.emails.loader, fixture.password);
+    for (const request of invalid) {
+      const anonymous = await app.inject(request);
+      expect(anonymous.statusCode, `${request.method} ${request.url}`).toBe(401);
+      expect(anonymous.json()).toEqual({
+        error: { code: 'UNAUTHENTICATED', message: 'Sign in required' },
+      });
+      // The loader has none of these actions; the driver only sync.
+      const cookie = request.url.includes('/sync/') ? loader : driver;
+      const wrongRole = await app.inject({ ...request, headers: { cookie } });
+      expect(wrongRole.statusCode, `${request.method} ${request.url}`).toBe(403);
+      expect(wrongRole.json()).toEqual({
+        error: { code: 'FORBIDDEN', message: 'You do not have access to this action' },
+      });
+    }
+
+    // With access, the same request is told what is wrong with it.
+    const store = await login(app, fixture.emails.storeManager, fixture.password);
+    const allowed = await app.inject({ ...invalid[0], headers: { cookie: store } });
+    expect(allowed.statusCode).toBe(400);
+    expect(allowed.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
   });
 
   it('hides orders outside the caller scope with 404', async () => {

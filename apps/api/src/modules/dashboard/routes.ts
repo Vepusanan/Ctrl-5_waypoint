@@ -23,7 +23,7 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/dashboard/summary',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['dashboard'],
         querystring: dashboardDateQuerySchema,
@@ -41,7 +41,7 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/dashboard/exceptions',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['dashboard'],
         querystring: dashboardDateQuerySchema,
@@ -60,7 +60,7 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/audit',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['dashboard'],
         querystring: auditTimelineQuerySchema,
@@ -81,7 +81,7 @@ export const dashboardRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/dashboard/stream',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: { tags: ['dashboard'] },
     },
     async (request, reply) => {

@@ -1,7 +1,7 @@
 import type { Database } from '@waypoint/database';
 import { sessions, users } from '@waypoint/database';
 import type { Role } from '@waypoint/shared';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, sql } from 'drizzle-orm';
 import type { AuditRecorder } from '../../plugins/audit.ts';
 import { ApiError } from '../../plugins/errors.ts';
 import { SESSION_TTL_MS } from './cookies.ts';
@@ -29,7 +29,10 @@ export function createAuthRepo(db: Database) {
         .select({ sessionId: sessions.id, user: users })
         .from(sessions)
         .innerJoin(users, eq(users.id, sessions.userId))
-        .where(and(eq(sessions.id, sessionId), gt(sessions.expiresAt, now)))
+        // A deactivated account loses its open sessions on the next request.
+        .where(
+          and(eq(sessions.id, sessionId), gt(sessions.expiresAt, now), isNull(users.disabledAt)),
+        )
         .limit(1);
       return rows[0] ?? null;
     },

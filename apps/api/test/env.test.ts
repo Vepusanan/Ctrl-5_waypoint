@@ -36,6 +36,18 @@ describe('loadEnv', () => {
     expect(() => loadEnv({ ...validEnv, SESSION_SECRET: 'short' })).toThrow(/SESSION_SECRET/);
   });
 
+  it('rejects the .env.example session secret outside DEMO_MODE', () => {
+    const placeholder = 'change-me-to-64-random-characters-before-any-shared-deploy';
+    expect(() => loadEnv({ ...validEnv, SESSION_SECRET: placeholder })).toThrow(/placeholder/);
+    expect(() => loadEnv({ ...validEnv, SESSION_SECRET: placeholder, DEMO_MODE: 'false' })).toThrow(
+      /placeholder/,
+    );
+    // A local demo started from the example file still boots.
+    expect(loadEnv({ ...validEnv, SESSION_SECRET: placeholder, DEMO_MODE: 'true' }).DEMO_MODE).toBe(
+      true,
+    );
+  });
+
   it('rejects a malformed DEMO_DATE', () => {
     expect(() => loadEnv({ ...validEnv, DEMO_DATE: '03/10/2026' })).toThrow(/DEMO_DATE/);
   });

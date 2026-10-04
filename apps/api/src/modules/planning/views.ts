@@ -58,7 +58,7 @@ export const savedViewRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/planning/views',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: { tags: ['planning'], response: { 200: savedViewListSchema, ...errors } },
     },
     async (request) => list(owner(request)),
@@ -67,7 +67,7 @@ export const savedViewRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/planning/views',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         body: createSavedViewRequestSchema,
@@ -98,7 +98,7 @@ export const savedViewRoutes: FastifyPluginAsyncZod = async (app) => {
   app.patch(
     '/planning/views/:id',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: idParamsSchema,
@@ -128,7 +128,7 @@ export const savedViewRoutes: FastifyPluginAsyncZod = async (app) => {
   app.delete(
     '/planning/views/:id',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: idParamsSchema,
@@ -150,7 +150,7 @@ export const savedViewRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     '/planning/views/order',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         body: orderSavedViewsRequestSchema,

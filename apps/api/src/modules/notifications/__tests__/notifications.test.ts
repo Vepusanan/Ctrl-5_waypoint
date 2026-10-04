@@ -34,6 +34,7 @@ import { client, cookiePair, SESSION_SECRET } from '../../../../test/http.ts';
 import { createMigratedDatabase } from '../../../../test/postgres.ts';
 import { buildApp } from '../../../app.ts';
 import { createOrderService } from '../../orders/service.ts';
+import { NOTIFICATION_LIST_LIMIT } from '../repo.ts';
 
 const SERVICE_DATE = '2026-10-07';
 const PINNED = '2026-10-06T10:00:00.000+05:30';
@@ -150,6 +151,29 @@ describe('notifications', () => {
     const anonymous = await app.inject({ method: 'GET', url: '/api/v1/notifications' });
     expect(anonymous.statusCode).toBe(401);
     expect(anonymous.json()).toMatchObject({ error: { code: 'UNAUTHENTICATED' } });
+  });
+
+  it('caps the feed and keeps the action-required notices in it', async () => {
+    const urgent = await insertNote(dispatcher.user.id, {
+      type: 'loading_shortfall',
+      priority: 'high',
+      // Older than every routine notice below.
+      createdAt: new Date('2026-10-01T08:00:00.000+05:30'),
+    });
+    await database.db.insert(notifications).values(
+      Array.from({ length: NOTIFICATION_LIST_LIMIT + 25 }, (_, index) => ({
+        recipientId: dispatcher.user.id,
+        type: 'delivered' as const,
+        priority: 'info' as const,
+        entityType: 'stop' as const,
+        entityId: randomUUID(),
+        createdAt: new Date(Date.parse('2026-10-05T08:00:00.000+05:30') + index * 1000),
+      })),
+    );
+
+    const feed = await list(dispatcher.cookie);
+    expect(feed.items).toHaveLength(NOTIFICATION_LIST_LIMIT);
+    expect(feed.items[0]?.id).toBe(urgent);
   });
 
   it('marks a notification read without clearing an action-required acknowledgement', async () => {
@@ -288,6 +312,8 @@ describe('notifications', () => {
   });
 
   it('notifies the store on deferral and the loader and driver on publish', async () => {
+    // A plan can only be published once the 4:00 PM cutoff has closed the run.
+    app.clock.pin(new Date('2026-10-06T16:00:00.000+05:30'));
     const served = await insertOrder({ weightKg: 100 });
     const deferred = await insertOrder({ weightKg: 5_000 });
     expect(

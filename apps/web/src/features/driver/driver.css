@@ -1426,41 +1426,6 @@ a.driver-offline:focus-visible {
 }
 
 /* DR08 account `2106:10813`, `2106:10858`, `2106:10900`. */
-.driver-week {
-  gap: var(--space-8);
-}
-
-.driver-week-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-12);
-}
-
-.driver-week-head strong {
-  font-size: 15px;
-  font-weight: 500;
-  line-height: 20px;
-}
-
-.driver-dots {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-4);
-}
-
-.driver-dots i {
-  width: 12px;
-  height: 12px;
-  border-radius: var(--radius-pill);
-  background: var(--color-data-pos);
-}
-
-.driver-dots i.driver-dot--late {
-  border: 2px solid var(--color-status-danger);
-  background: none;
-}
-
 .driver-language {
   display: grid;
   gap: var(--space-8);

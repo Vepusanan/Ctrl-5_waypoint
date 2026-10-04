@@ -15,7 +15,7 @@ export const syncRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/sync/events',
     {
-      preHandler: app.requireRole('driver'),
+      preValidation: app.requireRole('driver'),
       schema: {
         tags: ['sync'],
         body: syncEventsRequestSchema,
@@ -44,7 +44,7 @@ export const syncRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/sync/trips/:id',
     {
-      preHandler: app.requireRole('driver'),
+      preValidation: app.requireRole('driver'),
       schema: {
         tags: ['sync'],
         params: idParamsSchema,

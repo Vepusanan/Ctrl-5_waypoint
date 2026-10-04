@@ -57,7 +57,8 @@ const MISSING_RUN = 'Planning run not found';
 const EMPTY_PLAN =
   'The plan has no trips. Allocate orders, or defer each one with a reason, before publishing.';
 const NOTHING_TO_PUBLISH = 'There are no orders or deferrals to publish for this run';
-const INTAKE_OPEN = 'Orders for this run stay open until the 4:00 PM cutoff.';
+const INTAKE_OPEN =
+  'Orders for this run stay open until the 4:00 PM cutoff. Publish the plan after it.';
 const UNACCOUNTED = 'The plan does not account for every eligible order';
 
 type Dispatcher = Extract<User, { role: 'dispatcher' }>;
@@ -413,14 +414,16 @@ export function createPlanningService(
     },
 
     async publish(user, serviceDate, version) {
-      // A plan published while stores can still change submitted orders would leave those
-      // orders out of the run for good, so it waits for the cutoff that confirms them.
+      // Stores can place and change orders for this run until the cutoff. A plan published
+      // before it would leave every order sent in afterwards out of the run for good: the run
+      // is closed, and a confirmed order belongs to no other run.
       const intake = await orders.intakeForRun(assertDispatcher(user), serviceDate);
-      if (!intake.closed && intake.awaiting > 0) {
-        throw new ApiError(
-          'CONSTRAINT_VIOLATION',
-          `${INTAKE_OPEN} ${intake.awaiting} submitted ${intake.awaiting === 1 ? 'order joins' : 'orders join'} the run at the cutoff.`,
-        );
+      if (!intake.closed) {
+        const waiting =
+          intake.awaiting === 0
+            ? ''
+            : ` ${intake.awaiting} submitted ${intake.awaiting === 1 ? 'order joins' : 'orders join'} the run at the cutoff.`;
+        throw new ApiError('CONSTRAINT_VIOLATION', `${INTAKE_OPEN}${waiting}`);
       }
       return withOpenRun(
         db,

@@ -39,7 +39,9 @@ import { createPlanningRepo, type PlanningRepo } from '../repo.ts';
 import { createPlanningService } from '../service.ts';
 
 const SERVICE_DATE = '2026-10-07';
-const PINNED = '2026-10-06T10:00:00.000+05:30';
+// After the 4:00 PM cutoff that closes the run, so plans can be published.
+const PINNED = '2026-10-06T16:30:00.000+05:30';
+const BEFORE_CUTOFF = '2026-10-06T10:00:00.000+05:30';
 const PASSWORD = 'waypoint-demo';
 
 describe('planning', () => {
@@ -84,6 +86,7 @@ describe('planning', () => {
   });
 
   it('gives the dispatcher confirmed and carried-over deferred orders for the depot and date', async () => {
+    app.clock.pin(new Date(BEFORE_CUTOFF));
     const served = await insertOrder({
       requestedDate: '2026-10-01',
       status: 'delivered',
@@ -147,6 +150,7 @@ describe('planning', () => {
   });
 
   it('confirms submitted orders into the queue once the 4 PM cutoff has passed', async () => {
+    app.clock.pin(new Date(BEFORE_CUTOFF));
     const submitted = await insertOrder({ status: 'submitted' });
     const queue = () =>
       app.inject({
@@ -155,7 +159,7 @@ describe('planning', () => {
         headers: { cookie: dispatcher.cookie },
       });
 
-    // PINNED is 10:00 on the cutoff day, so the order is still open to the store. The queue
+    // 10:00 on the cutoff day, so the order is still open to the store. The queue
     // leaves it out and says one order is still to come.
     const before = planningQueueResponseSchema.parse(json(await queue(), 200));
     expect(before.items.map((item) => item.id)).not.toContain(submitted);
@@ -531,6 +535,40 @@ describe('planning', () => {
     expect(stops.map((stop) => stop.orderId)).toContain(carried);
   });
 
+  it('keeps a carried-over order on one draft when two later runs are open', async () => {
+    const carried = await insertOrder({ requestedDate: '2026-10-06', status: 'deferred' });
+    const allocate = (date: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/planning/runs/${date}/auto-allocate`,
+        headers: { cookie: dispatcher.cookie, 'if-match': '0' },
+      });
+    const queue = async (date: string) =>
+      planningQueueResponseSchema.parse(
+        json(
+          await app.inject({
+            method: 'GET',
+            url: `/api/v1/planning/runs/${date}/queue`,
+            headers: { cookie: dispatcher.cookie },
+          }),
+          200,
+        ),
+      );
+
+    // Both runs carry the order until one of them drafts it.
+    expect((await queue(SERVICE_DATE)).items.map((item) => item.id)).toEqual([carried]);
+    expect((await queue('2026-10-08')).items.map((item) => item.id)).toEqual([carried]);
+    expect((await allocate(SERVICE_DATE)).statusCode).toBe(200);
+
+    // The next day's run no longer offers it, so its draft cannot claim the same order twice.
+    expect((await queue('2026-10-08')).items).toEqual([]);
+    const later = await allocate('2026-10-08');
+    expect(later.statusCode).toBe(200);
+    expect(autoAllocateResponseSchema.parse(later.json()).trips).toEqual([]);
+    const stops = await database.db.select().from(tripStops).where(eq(tripStops.orderId, carried));
+    expect(stops).toHaveLength(1);
+  });
+
   it('rolls back a failed publish', async () => {
     const orderId = await insertOrder();
     await app.inject({
@@ -793,6 +831,7 @@ describe('planning', () => {
   });
 
   it('refuses to publish while submitted orders still wait for the cutoff', async () => {
+    app.clock.pin(new Date(BEFORE_CUTOFF));
     await insertOrder();
     const waiting = await insertOrder({ outletId: 'OUT201', temp: 'chilled', status: 'submitted' });
     const allocated = await app.inject({
@@ -808,7 +847,7 @@ describe('planning', () => {
         headers: { cookie: dispatcher.cookie, 'if-match': String(version) },
       });
 
-    // PINNED is before the cutoff: publishing now would leave the submitted order out for good.
+    // Before the cutoff: publishing now would leave the submitted order out for good.
     const early = await publish(1);
     expect(early.statusCode).toBe(422);
     expect(early.json()).toMatchObject({
@@ -825,6 +864,42 @@ describe('planning', () => {
     expect((await publish(1)).statusCode).toBe(200);
     const stored = await database.db.select().from(orders).where(eq(orders.id, waiting));
     expect(stored[0]?.status).not.toBe('submitted');
+  });
+
+  it('refuses to publish before the cutoff even when no order is waiting', async () => {
+    // A carried-over order is the whole queue, so nothing is waiting on the cutoff yet.
+    const carried = await insertOrder({ requestedDate: '2026-10-06', status: 'deferred' });
+    const allocated = await app.inject({
+      method: 'POST',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/auto-allocate`,
+      headers: { cookie: dispatcher.cookie, 'if-match': '0' },
+    });
+    expect(allocated.statusCode).toBe(200);
+    const publish = () =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/planning/runs/${SERVICE_DATE}/publish`,
+        headers: { cookie: dispatcher.cookie, 'if-match': '1' },
+      });
+
+    // A store can still send an order for this run until 4:00 PM. Publishing first would close
+    // the run on it: the order would be confirmed at the cutoff and never planned.
+    app.clock.pin(new Date(BEFORE_CUTOFF));
+    const early = await publish();
+    expect(early.statusCode).toBe(422);
+    expect(early.json()).toMatchObject({
+      error: {
+        code: 'CONSTRAINT_VIOLATION',
+        message: expect.stringContaining('4:00 PM cutoff'),
+      },
+    });
+    const runs = await database.db.select().from(planningRuns);
+    expect(runs.every((run) => run.status === 'open')).toBe(true);
+    const held = await database.db.select().from(orders).where(eq(orders.id, carried));
+    expect(held[0]?.status).toBe('deferred');
+
+    app.clock.pin(new Date('2026-10-06T16:00:00.000+05:30'));
+    expect((await publish()).statusCode).toBe(200);
   });
 
   it('replans a published run when its vehicle is lost', async () => {
@@ -904,6 +979,41 @@ describe('planning', () => {
     );
     const notes = await database.db.select().from(notifications);
     expect(notes.some((note) => note.type === 'plan_changed')).toBe(true);
+  });
+
+  it('does not block a trip that departs while its vehicle is being marked unavailable', async () => {
+    await publishDay();
+    const [trip] = await database.db.select().from(trips);
+    if (trip === undefined) throw new Error('Expected a published trip');
+    await database.db.update(trips).set({ status: 'ready' }).where(eq(trips.id, trip.id));
+
+    // A departure holds the trip row. The breakdown report arrives before it commits, so it has
+    // to wait for the row and then see the trip as departed, not overwrite it with Blocked.
+    const pending = await database.db.transaction(async (tx) => {
+      await tx.select({ id: trips.id }).from(trips).where(eq(trips.id, trip.id)).for('update');
+      const marking = app
+        .inject({
+          method: 'POST',
+          url: `/api/v1/vehicles/${trip.vehicleId}/unavailable`,
+          headers: { cookie: dispatcher.cookie },
+          payload: { date: SERVICE_DATE, reason: 'Brake failure' },
+        })
+        .then((response) => response);
+      // Give the request time to reach the locked row before the departure commits.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await tx
+        .update(trips)
+        .set({ status: 'departed', version: trip.version + 1 })
+        .where(eq(trips.id, trip.id));
+      // Wrapped, so the transaction commits without waiting for the request it is blocking.
+      return { marking };
+    });
+    const marked = await pending.marking;
+    expect(marked.statusCode).toBe(200);
+    expect(marked.json()).toMatchObject({ blockedTripIds: [], affectedOrderIds: [] });
+    const [after] = await database.db.select().from(trips);
+    expect(after?.status).toBe('departed');
+    expect(after?.version).toBe(trip.version + 1);
   });
 
   it('defers a published order with a reason and leaves departed trips alone', async () => {

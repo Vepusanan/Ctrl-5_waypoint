@@ -17,7 +17,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/orders',
     {
-      preHandler: app.requireRole('dispatcher', 'store_manager'),
+      preValidation: app.requireRole('dispatcher', 'store_manager'),
       schema: {
         tags: ['orders'],
         querystring: listOrdersQuerySchema,
@@ -35,7 +35,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/orders/:id',
     {
-      preHandler: app.requireRole('dispatcher', 'store_manager'),
+      preValidation: app.requireRole('dispatcher', 'store_manager'),
       schema: {
         tags: ['orders'],
         params: idParamsSchema,
@@ -54,7 +54,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/orders',
     {
-      preHandler: app.requireRole('store_manager'),
+      preValidation: app.requireRole('store_manager'),
       schema: {
         tags: ['orders'],
         body: createOrderRequestSchema,
@@ -76,7 +76,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
   app.patch(
     '/orders/:id',
     {
-      preHandler: app.requireRole('store_manager'),
+      preValidation: app.requireRole('store_manager'),
       schema: {
         tags: ['orders'],
         params: idParamsSchema,
@@ -100,7 +100,7 @@ export const orderRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/orders/:id/cancel',
     {
-      preHandler: app.requireRole('store_manager'),
+      preValidation: app.requireRole('store_manager'),
       schema: {
         tags: ['orders'],
         params: idParamsSchema,

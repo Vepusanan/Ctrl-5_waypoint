@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { message } from '../../lib/api';
 import { useAuth } from '../auth/auth';
 import { initials } from '../store/shared';
-import { DISPATCH_OFFICE, telHref, WEEK_STOPS } from './fixtures';
+import { DISPATCH_OFFICE, telHref } from './fixtures';
 import { Chip, DriverHeader, DriverIcon, Glyph } from './shell';
 import { useDriver } from './workspace';
 
@@ -50,7 +50,6 @@ export function DriverAccount() {
     LANGUAGES,
   );
   const waiting = sync.pending > 0;
-  const onTime = WEEK_STOPS.filter(Boolean).length;
   const locked = waiting || !online || logout.isPending;
 
   return (
@@ -62,22 +61,6 @@ export function DriverAccount() {
         <div className="driver-row-text">
           <strong>{user.name}</strong>
           <span>Driver · {user.vehicleId}</span>
-        </div>
-      </section>
-
-      <section className="driver-card driver-card--inverse driver-week" aria-label="This week">
-        <div className="driver-week-head">
-          <span className="driver-inverse-muted">This week</span>
-          <strong>
-            {onTime} of {WEEK_STOPS.length} on time
-          </strong>
-        </div>
-        <div className="driver-dots" aria-hidden="true">
-          {WEEK_STOPS.map((ok, index) => (
-            // The dots never reorder, so the position is the identity.
-            // biome-ignore lint/suspicious/noArrayIndexKey: fixed-length list of stops in order
-            <i key={index} className={ok ? undefined : 'driver-dot--late'} />
-          ))}
         </div>
       </section>
 

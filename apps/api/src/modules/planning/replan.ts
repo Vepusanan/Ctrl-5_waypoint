@@ -58,6 +58,7 @@ const MISSING_VEHICLE = 'Vehicle not found';
 const MISSING_ORDER = 'Order not found';
 const NOTHING = 'The replan does not change the plan';
 const REASON_REQUIRED = 'A deferral needs a reason code';
+const TRIP_CHANGED = 'A trip changed while the vehicle was being marked unavailable. Try again.';
 
 /** A trip the loader has not released yet. Its orders are still at the depot. */
 const MOVABLE_SOURCE: readonly TripStatus[] = ['published', 'loading', 'blocked'];
@@ -119,6 +120,8 @@ export function createReplanService(
           (row) => row.id === vehicleId,
         );
         if (vehicle === undefined) throw new ApiError('NOT_FOUND', MISSING_VEHICLE);
+        // Trips first, then availability: the order a departure takes them in.
+        const run = await findRun(tx, depotId, input.date, true);
         await tx
           .insert(vehicleAvailability)
           .values({ vehicleId, date: input.date, status: 'in_workshop' })
@@ -127,17 +130,24 @@ export function createReplanService(
             set: { status: 'in_workshop' },
           });
 
-        const run = await findRun(tx, depotId, input.date, true);
         const blocked: RunTrip[] = [];
         const affected: string[] = [];
         if (run !== null) {
           for (const trip of run.trips) {
             if (trip.vehicleId !== vehicleId || !BLOCKABLE.includes(trip.status)) continue;
             tripStateMachine.assertTransition(trip.status, 'blocked');
-            await tx
+            const stopped = await tx
               .update(trips)
               .set({ status: 'blocked', version: trip.version + 1 })
-              .where(eq(trips.id, trip.id));
+              .where(
+                and(
+                  eq(trips.id, trip.id),
+                  eq(trips.status, trip.status),
+                  eq(trips.version, trip.version),
+                ),
+              )
+              .returning({ id: trips.id });
+            if (stopped.length === 0) throw new ApiError('VERSION_CONFLICT', TRIP_CHANGED);
             blocked.push(trip);
             for (const stop of trip.stops) affected.push(stop.orderId);
           }
@@ -647,7 +657,9 @@ async function findRun(
   const rows = lock ? await query.for('update') : await query;
   const run = rows[0];
   if (run === undefined || run.status !== 'published') return null;
-  const tripRows = await db
+  // Loading and departure lock the trip row, not the run. A replan takes the same locks, so it
+  // waits for a Ready or a departure in flight and then decides on the trip as it now stands.
+  const tripQuery = db
     .select({
       id: trips.id,
       vehicleId: trips.vehicleId,
@@ -658,6 +670,7 @@ async function findRun(
     .from(trips)
     .where(eq(trips.runId, run.id))
     .orderBy(asc(trips.vehicleId), asc(trips.tripNo));
+  const tripRows = lock ? await tripQuery.for('update') : await tripQuery;
   const ids = tripRows.map((trip) => trip.id);
   const stopRows =
     ids.length === 0

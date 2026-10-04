@@ -9,10 +9,4 @@ export const DISPATCH_OFFICE = {
   phone: '+94 11 555 0100',
 } as const;
 
-// DR08 "This week · 19 of 20 on time": one dot per stop, in delivery order.
-export const WEEK_STOPS: readonly boolean[] = Array.from(
-  { length: 20 },
-  (_, index) => index !== 13,
-);
-
 export const telHref = (phone: string) => `tel:${phone.replace(/\s/g, '')}`;

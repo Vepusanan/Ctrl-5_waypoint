@@ -1,4 +1,4 @@
-import { auditLog, sessions } from '@waypoint/database';
+import { auditLog, sessions, users } from '@waypoint/database';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.ts';
@@ -324,6 +324,42 @@ describe('authentication', () => {
     expect(await app.db.select().from(sessions).where(eq(sessions.userId, userId))).toHaveLength(0);
     const audit = await app.db.select().from(auditLog).where(eq(auditLog.action, 'auth.logout'));
     expect(audit.some((entry) => entry.actorId === userId)).toBe(true);
+  });
+
+  it('locks a deactivated account out of sign-in and of its open sessions', async () => {
+    const login = await signIn(app, fixture.emails.loader, fixture.password);
+    const cookie = cookiePair(login);
+    const me = () => app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: { cookie } });
+    expect((await me()).statusCode).toBe(200);
+
+    await app.db
+      .update(users)
+      .set({ disabledAt: new Date() })
+      .where(eq(users.email, fixture.emails.loader));
+    try {
+      // The session that was open stops working on its next request.
+      expect((await me()).statusCode).toBe(401);
+      const work = await app.inject({ method: 'GET', url: '/api/v1/trips', headers: { cookie } });
+      expect(work.statusCode).toBe(401);
+
+      // A fresh sign-in is refused with the same answer as a wrong password.
+      const again = await app.inject({
+        ...client(),
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { email: fixture.emails.loader, password: fixture.password },
+      });
+      expect(again.statusCode).toBe(401);
+      expect(again.json()).toEqual({
+        error: { code: 'UNAUTHENTICATED', message: 'Invalid email or password' },
+      });
+    } finally {
+      await app.db
+        .update(users)
+        .set({ disabledAt: null })
+        .where(eq(users.email, fixture.emails.loader));
+    }
+    await signIn(app, fixture.emails.loader, fixture.password);
   });
 
   it('requires a session to log out', async () => {

@@ -29,7 +29,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/outlets',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         querystring: listOutletsQuerySchema,
@@ -47,7 +47,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/outlets/:id',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         params: outletParamsSchema,
@@ -66,7 +66,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/vehicles',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         querystring: listVehiclesQuerySchema,
@@ -84,7 +84,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/vehicles/:id',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         params: vehicleParamsSchema,
@@ -104,7 +104,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/depots',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         response: {
@@ -120,7 +120,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/calendar',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         querystring: listCalendarQuerySchema,
@@ -138,7 +138,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/district-travel',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         querystring: listDistrictTravelQuerySchema,
@@ -156,7 +156,7 @@ export const referenceRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/service-allowances',
     {
-      preHandler: app.requireRole(...roles),
+      preValidation: app.requireRole(...roles),
       schema: {
         tags: ['reference'],
         querystring: listServiceAllowancesQuerySchema,

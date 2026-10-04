@@ -44,6 +44,10 @@ const columns = {
   acknowledgedAt: notifications.acknowledgedAt,
 };
 
+// The bell polls this list, and a recipient's notifications only ever grow. The cap drops the
+// oldest, lowest-priority rows first.
+export const NOTIFICATION_LIST_LIMIT = 200;
+
 // High, then medium, then info. Newest first inside a priority.
 const priorityRank = sql`case ${notifications.priority} when 'high' then 0 when 'medium' then 1 else 2 end`;
 
@@ -54,7 +58,8 @@ export function createNotificationRepo(): NotificationRepo {
         .select(columns)
         .from(notifications)
         .where(eq(notifications.recipientId, recipientId))
-        .orderBy(asc(priorityRank), desc(notifications.createdAt), desc(notifications.id));
+        .orderBy(asc(priorityRank), desc(notifications.createdAt), desc(notifications.id))
+        .limit(NOTIFICATION_LIST_LIMIT);
     },
 
     async lockForRecipient(db, id, recipientId) {

@@ -146,6 +146,13 @@ and the password in the `migrate` log. A second start keeps the existing data.
 | `SEED_PASSWORD` | Optional password for the seeded accounts (default `waypoint-demo`) |
 | `LOG_LEVEL` | API log level |
 
+Outside the demo (`DEMO_MODE=false`) the demo clock and Reset demo data do not exist, and three
+guards apply: the API will not start with the `.env.example` `SESSION_SECRET`; `pnpm db:seed`
+will not create accounts with the default password, so set `SEED_PASSWORD`; and
+`pnpm db:seed --reset`, which deletes every order, trip, delivery and audit record, refuses to run.
+To take a user's access away, set `users.disabled_at`: sign-in and any open session stop at once,
+and the user's history stays.
+
 ## Manual Development Setup
 
 Prerequisites: Node 22.18 or newer (`.nvmrc`), pnpm through Corepack (`corepack enable pnpm`),

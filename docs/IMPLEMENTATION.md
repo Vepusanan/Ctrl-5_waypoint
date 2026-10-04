@@ -400,7 +400,7 @@ tracking steps strip and the delivered state (I16, I18).
 | Mode | How | What you see |
 | --- | --- | --- |
 | Real API | `pnpm dev` and sign in as the store manager | The seeded outlet. Sending an order, confirming a receipt and reporting an issue are real requests. |
-| Figma scenario | open `/store?fixtures=on` (off again with `?fixtures=off`), or set `VITE_STORE_FIXTURES=all` | Outlet WF-F071 Gampola on Fri 25 Sep 11:40. Actions change memory only and reset on refresh. Sign-in is still real. |
+| Figma scenario | on the dev server, open `/store?fixtures=on` (off again with `?fixtures=off`); in any build, set `VITE_STORE_FIXTURES=all` | Outlet WF-F071 Gampola on Fri 25 Sep 11:40. Actions change memory only and reset on refresh. Sign-in is still real. |
 
 ### Backend gaps (typed in `contracts.ts`, filled by `insights` in `data.ts`)
 

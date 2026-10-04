@@ -30,5 +30,7 @@ export const orders = pgTable(
       sql`${table.units} > 0 and ${table.weightKg} > 0 and ${table.volumeM3} > 0`,
     ),
     check('orders_version_nonnegative', sql`${table.version} >= 0`),
+    // BR-020: only Fresh has chilled goods.
+    check('orders_chilled_fresh_only', sql`${table.temp} = 'ambient' or ${table.brand} = 'Fresh'`),
   ],
 );

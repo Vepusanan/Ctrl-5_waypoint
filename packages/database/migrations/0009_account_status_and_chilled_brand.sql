@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "disabled_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_chilled_fresh_only" CHECK ("orders"."temp" = 'ambient' or "orders"."brand" = 'Fresh');

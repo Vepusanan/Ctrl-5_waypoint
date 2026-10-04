@@ -35,6 +35,7 @@ const MISSING = 'Order not found';
 const STALE = 'Order version is stale';
 const LOCKED = 'Order is locked and cannot be changed';
 const CUTOFF = 'The 4:00 PM cutoff has passed';
+const CHILLED_BRAND = 'Only Waypoint Fresh outlets can order chilled goods';
 
 export interface OrderService {
   list(user: User | null, query: ListOrdersQuery): Promise<OrderListResponse>;
@@ -85,6 +86,7 @@ export function createOrderService(
         const outlet = await repo.findOutlet(tx, manager.outletId);
         if (outlet === null) throw new ApiError('NOT_FOUND', 'Outlet not found');
         orderStateMachine.assertTransition('draft', 'submitted');
+        assertTemperature(outlet.brand, input.temp);
         const assigned = await assignServiceDate(repo, tx, input.requestedDate, now);
         const slot: OrderSlot = {
           outletId: outlet.id,
@@ -141,6 +143,7 @@ export function createOrderService(
         }
         const nextDate = changes.requestedDate ?? current.requestedDate;
         const nextTemp = changes.temp ?? current.temp;
+        assertTemperature(current.brand, nextTemp);
         if (
           changes.requestedDate !== undefined &&
           changes.requestedDate !== current.requestedDate
@@ -311,6 +314,14 @@ function assertStoreManager(user: User | null): Extract<User, { role: 'store_man
     throw new ApiError('FORBIDDEN', 'You do not have access to this action');
   }
   return user;
+}
+
+// BR-020: only Fresh has chilled demand. A chilled Style or Tech order would take reefer
+// capacity from goods that need it.
+function assertTemperature(brand: Order['brand'], temp: Order['temp']): void {
+  if (temp === 'chilled' && brand !== 'Fresh') {
+    throw new ApiError('VALIDATION_ERROR', CHILLED_BRAND);
+  }
 }
 
 function listFilter(query: ListOrdersQuery): OrderListFilter {

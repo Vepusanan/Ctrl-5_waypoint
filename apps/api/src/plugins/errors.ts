@@ -93,7 +93,30 @@ function toErrorBody(error: FastifyError, request: FastifyRequest): ErrorBody {
   if (error.code === 'FST_ERR_CTP_BODY_TOO_LARGE' || error.statusCode === 413) {
     return errorBody('VALIDATION_ERROR', 'Request body is too large');
   }
+  if (isWriteCollision(error)) {
+    request.log.warn({ err: error }, 'request.write_collision');
+    return errorBody(
+      'VERSION_CONFLICT',
+      'Someone else changed this at the same time. Refresh and try again.',
+    );
+  }
   return errorBody('INTERNAL_ERROR', 'Something went wrong');
+}
+
+// PostgreSQL states for two writers meeting on the same rows: a unique key taken first by the
+// other transaction, a serialization failure, a deadlock. The transaction rolled back whole, so
+// the caller can retry on fresh data. The ORM wraps the driver error, hence the cause chain.
+const WRITE_COLLISION_STATES = new Set(['23505', '40001', '40P01']);
+
+function isWriteCollision(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 5 && typeof current === 'object' && current !== null; depth += 1) {
+    if ('code' in current && typeof current.code === 'string') {
+      if (WRITE_COLLISION_STATES.has(current.code)) return true;
+    }
+    current = 'cause' in current ? current.cause : null;
+  }
+  return false;
 }
 
 function isOversizedUpload(error: FastifyError, request: FastifyRequest): boolean {

@@ -34,7 +34,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/planning/runs/:date/queue',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: planningRunParamsSchema,
@@ -53,7 +53,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/planning/runs/:date/auto-allocate',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: planningRunParamsSchema,
@@ -76,7 +76,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/planning/validate',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         body: validatePlanRequestSchema,
@@ -96,7 +96,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.put(
     '/planning/runs/:date/allocations',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: planningRunParamsSchema,
@@ -120,7 +120,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/deferrals',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         headers: ifMatchHeadersSchema,
@@ -142,7 +142,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/planning/runs/:date/simulate',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: planningRunParamsSchema,
@@ -163,7 +163,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/planning/runs/:date/publish',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: planningRunParamsSchema,
@@ -187,7 +187,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/vehicles/:id/unavailable',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: vehicleParamsSchema,
@@ -207,7 +207,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.get(
     '/planning/runs/:date/replans/:vehicleId',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: planningRunParamsSchema.extend({ vehicleId: vehicleIdSchema }),
@@ -228,7 +228,7 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/planning/runs/:date/replan',
     {
-      preHandler: app.requireRole('dispatcher'),
+      preValidation: app.requireRole('dispatcher'),
       schema: {
         tags: ['planning'],
         params: planningRunParamsSchema,

@@ -48,7 +48,8 @@ export function createAuthService(
       const email = input.email.trim().toLowerCase();
       const row = await repo.findUserByEmail(email);
       const matches = await passwordMatches(input.password, row?.passwordHash ?? null);
-      if (row === null || !matches) {
+      // A deactivated account gets the same answer as a wrong password.
+      if (row === null || !matches || row.disabledAt !== null) {
         log.warn({ email }, 'auth.login_failed');
         throw new ApiError('UNAUTHENTICATED', 'Invalid email or password');
       }

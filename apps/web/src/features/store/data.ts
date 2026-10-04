@@ -39,11 +39,14 @@ import * as fixtures from './fixtures';
  * - `insights`: what the frames show and the API does not return yet (`contracts.ts`). With
  *   fixtures on they come from Figma; otherwise they are derived from the API response.
  *
- * Fixtures are on with `VITE_STORE_FIXTURES=all`, or for one browser tab by opening
+ * Fixtures are on with `VITE_STORE_FIXTURES=all`, or, on the dev server only, for one tab by opening
  * `/store?fixtures=on` (`?fixtures=off` turns them off again).
  */
 const TAB_KEY = 'waypoint.store.fixtures';
 function readMode(): boolean {
+  // The per-tab switch is a development aid. A deployed build never lets a URL swap a store's
+  // real orders for the Figma scenario, where placing an order reaches no one.
+  if (!import.meta.env.DEV) return import.meta.env.VITE_STORE_FIXTURES === 'all';
   try {
     const asked = new URLSearchParams(window.location.search).get('fixtures');
     if (asked === 'on' || asked === 'off') window.sessionStorage.setItem(TAB_KEY, asked);

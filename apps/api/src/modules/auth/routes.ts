@@ -44,7 +44,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ loginLimit?: number }> = async 
   app.post(
     '/auth/logout',
     {
-      preHandler: app.requireRole(...everyRole()),
+      preValidation: app.requireRole(...everyRole()),
       schema: { tags: ['auth'] },
     },
     async (request, reply) => {
@@ -57,7 +57,7 @@ export const authRoutes: FastifyPluginAsyncZod<{ loginLimit?: number }> = async 
   app.get(
     '/auth/me',
     {
-      preHandler: app.requireRole(...everyRole()),
+      preValidation: app.requireRole(...everyRole()),
       schema: {
         tags: ['auth'],
         response: { 200: currentUserResponseSchema, 401: apiErrorSchema, 403: apiErrorSchema },

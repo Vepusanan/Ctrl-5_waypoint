@@ -496,6 +496,24 @@ describe('database constraints', () => {
     );
   });
 
+  it('accepts a chilled order for the Fresh brand only', async () => {
+    await seed(db);
+    const chilled = (brand: 'Fresh' | 'Style' | 'Tech') =>
+      db.insert(orders).values({
+        outletId: 'OUT001',
+        brand,
+        temp: 'chilled',
+        requestedDate: '2026-10-03',
+        units: 1,
+        weightKg: 2,
+        volumeM3: 0.1,
+      });
+    // BR-020. PostgreSQL 23514 is a check violation.
+    await expectCode(() => chilled('Style'), '23514');
+    await expectCode(() => chilled('Tech'), '23514');
+    await chilled('Fresh');
+  });
+
   it('makes stop sync idempotent and requires a deferral reason', async () => {
     const fixture = await seed(db);
     const clientEventId = '018f3b2e-7c1a-7b2c-8d3e-4f5a6b7c8d9e';

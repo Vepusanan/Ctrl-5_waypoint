@@ -21,6 +21,13 @@ export function loadEnv(source: NodeJS.ProcessEnv): z.infer<typeof envSchema> {
   if (!result.success) {
     throw new Error(`Invalid environment:\n${z.prettifyError(result.error)}`);
   }
+  // The secret signs every session cookie. Outside the demo the published placeholder from
+  // .env.example would let anyone forge one.
+  if (!result.data.DEMO_MODE && result.data.SESSION_SECRET.startsWith('change-me')) {
+    throw new Error(
+      'Invalid environment:\nSESSION_SECRET is still the .env.example placeholder. Set 64 random characters.',
+    );
+  }
   return result.data;
 }
 
