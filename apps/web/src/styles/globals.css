@@ -816,14 +816,6 @@ kbd {
 .app > * {
   margin-bottom: 16px;
 }
-.system-status dl {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-}
-.system-status dd {
-  margin: 0;
-}
 @media (min-width: 1600px) {
   .wp-main {
     max-width: 1500px;

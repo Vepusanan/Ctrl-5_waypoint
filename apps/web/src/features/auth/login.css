@@ -97,15 +97,6 @@
   font-weight: 500;
   color: var(--color-text-secondary);
 }
-.auth-health {
-  width: min(440px, 100%);
-  margin-top: var(--space-16);
-  color: var(--color-text-tertiary);
-  font-size: 12px;
-}
-.auth-health .system-status {
-  margin-top: var(--space-12);
-}
 .auth-signin .auth-mobile-brand {
   display: none;
 }

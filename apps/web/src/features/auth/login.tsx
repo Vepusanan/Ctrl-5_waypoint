@@ -2,7 +2,6 @@ import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Button, Card } from '../../components/waypoint';
 import { message } from '../../lib/api';
-import { SystemStatus } from '../health/system-status';
 import { useAuth } from './auth';
 import './login.css';
 
@@ -98,10 +97,6 @@ export function SignIn() {
             </Button>
           </form>
         </Card>
-        <details className="auth-health">
-          <summary>System status</summary>
-          <SystemStatus />
-        </details>
       </div>
     </main>
   );
