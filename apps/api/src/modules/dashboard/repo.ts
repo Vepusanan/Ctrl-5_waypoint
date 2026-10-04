@@ -267,10 +267,34 @@ export function createDashboardRepo(): DashboardRepo {
           createdAt: auditLog.createdAt,
         })
         .from(auditLog)
-        .where(and(eq(auditLog.entityType, entityType), eq(auditLog.entityId, entityId)))
+        .where(
+          entityType === 'order'
+            ? orderStory(entityId)
+            : and(eq(auditLog.entityType, entityType), eq(auditLog.entityId, entityId)),
+        )
         .orderBy(asc(auditLog.createdAt), asc(auditLog.id));
     },
   };
+}
+
+// An order's story spans several audited entities (SRS FR-AUD-001): the order itself, the plan
+// that served or deferred it, its trip and loading, its stop, and any issue raised against it.
+function orderStory(orderId: string): SQL {
+  return sql`(
+    (${auditLog.entityType} = 'order' and ${auditLog.entityId} = ${orderId})
+    or (${auditLog.entityType} = 'stop' and ${auditLog.entityId} in (
+      select ${tripStops.id}::text from ${tripStops} where ${tripStops.orderId}::text = ${orderId}
+    ))
+    or (${auditLog.entityType} = 'trip' and ${auditLog.entityId} in (
+      select ${tripStops.tripId}::text from ${tripStops} where ${tripStops.orderId}::text = ${orderId}
+    ))
+    or (${auditLog.entityType} in ('issue', 'loading_issue')
+      and ${auditLog.after} ->> 'orderId' = ${orderId})
+    or (${auditLog.action} = 'plan.published' and (
+      ${auditLog.after} -> 'servedOrderIds' ? ${orderId}
+      or ${auditLog.after} -> 'deferredOrderIds' ? ${orderId}
+    ))
+  )`;
 }
 
 function onDate(date: string, tripScope: SQL): SQL {

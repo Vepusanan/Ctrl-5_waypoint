@@ -2,7 +2,8 @@ import react from '@vitejs/plugin-react';
 import { defaultClientConditions, defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-const apiProxy = { '/api': 'http://localhost:3000' };
+// API_PROXY_TARGET points the dev server at an API on another port (default :3000).
+const apiProxy = { '/api': process.env.API_PROXY_TARGET ?? 'http://localhost:3000' };
 
 export default defineConfig({
   plugins: [

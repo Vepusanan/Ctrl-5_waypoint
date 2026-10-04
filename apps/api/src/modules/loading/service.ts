@@ -39,6 +39,7 @@ const NOT_ON_TRIP = 'Order is not on this trip';
 const QTY = 'Issue quantity exceeds the order';
 const ORDER = 'Order is not ready to load';
 const ALREADY_ACK = 'Loading issue is already acknowledged';
+const UNVERIFIED = 'Verify the load against the plan before marking it ready';
 const TRIP_READY = 'Trip cannot be marked ready';
 const LOADING_READY = 'Loading cannot be marked ready';
 
@@ -304,6 +305,8 @@ export function createLoadingService(
         }
         const open = await repo.countOpenIssues(tx, trip.id);
         if (open > 0) throw new ApiError('CONSTRAINT_VIOLATION', UNACKNOWLEDGED);
+        // SRS §19: Ready only once the load has been checked against the plan.
+        if (loading.verifiedAt === null) throw new ApiError('CONSTRAINT_VIOLATION', UNVERIFIED);
         if (!tripStateMachine.canTransition(trip.status, 'ready')) {
           throw new ApiError('CONSTRAINT_VIOLATION', TRIP_READY);
         }

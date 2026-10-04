@@ -1,4 +1,4 @@
-import { orders } from '@waypoint/database';
+import { orders, trips } from '@waypoint/database';
 import type { User } from '@waypoint/shared';
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,10 +18,12 @@ describe('RBAC', () => {
   let app: Awaited<ReturnType<typeof buildApp>>;
   let close: (() => Promise<void>) | undefined;
   let fixture: AuthFixture;
+  let db: Awaited<ReturnType<typeof createMigratedDatabase>>['db'];
 
   beforeAll(async () => {
     const database = await createMigratedDatabase();
     close = database.close;
+    db = database.db;
     fixture = await seedAuthFixture(database.db);
     app = await buildApp({
       db: database.db,
@@ -195,6 +197,20 @@ describe('RBAC', () => {
     // Internal trip detail is not a store tracking API.
     expect(await tripStatus(app, store, fixture.trips.home)).toBe(403);
     expect(await tripStatus(app, store, fixture.trips.otherDepot)).toBe(403);
+  });
+
+  it('keeps draft trips from the loader and driver until the plan is published', async () => {
+    const driver = await login(app, fixture.emails.driver, fixture.password);
+    const loader = await login(app, fixture.emails.loader, fixture.password);
+    const dispatcher = await login(app, fixture.emails.dispatcher, fixture.password);
+    await db.update(trips).set({ status: 'planned' }).where(eq(trips.id, fixture.trips.home));
+    try {
+      expect(await tripStatus(app, driver, fixture.trips.home)).toBe(404);
+      expect(await tripStatus(app, loader, fixture.trips.home)).toBe(404);
+      expect(await tripStatus(app, dispatcher, fixture.trips.home)).toBe(200);
+    } finally {
+      await db.update(trips).set({ status: 'published' }).where(eq(trips.id, fixture.trips.home));
+    }
   });
 });
 

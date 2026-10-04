@@ -218,6 +218,33 @@ describe('orders', () => {
     }
   });
 
+  it('submits a saved draft the first time the store manager saves it', async () => {
+    const store = await login(fixture.emails.storeManager);
+    const order = await createdOrder(store.cookie);
+    await database.db
+      .update(orders)
+      .set({ status: 'draft', submittedAt: null })
+      .where(eq(orders.id, order.id));
+    app.clock.pin(at(JUST_BEFORE));
+    const { seen, stop } = captureEvents();
+    try {
+      const response = await patch(store.cookie, order.id, order.version, { units: 9 });
+      expect(response.statusCode).toBe(200);
+      const sent = orderSchema.parse(response.json());
+      expect(sent.status).toBe('submitted');
+      expect(sent.submittedAt).not.toBeNull();
+      expect(sent.units).toBe(9);
+      expect(seen.map((event) => event.type)).toEqual(['order.submitted']);
+      const audit = await database.db
+        .select()
+        .from(auditLog)
+        .where(eq(auditLog.entityId, order.id));
+      expect(audit.map((row) => row.action)).toContain('order.submitted');
+    } finally {
+      stop();
+    }
+  });
+
   it('rejects an edit at and after the 4:00 PM cutoff', async () => {
     const store = await login(fixture.emails.storeManager);
     const order = await createdOrder(store.cookie);

@@ -34,12 +34,15 @@ function orderScope(user: User): SQL {
   }
 }
 
+const published = sql`${trips.status} <> 'planned'`;
+
 function tripScope(user: User): SQL {
   switch (user.role) {
+    // Draft trips belong to the dispatcher until the plan is published.
     case 'driver':
-      return eq(trips.vehicleId, user.vehicleId);
+      return sql`${trips.vehicleId} = ${user.vehicleId} and ${published}`;
     case 'loader':
-      return vehiclesAtDepot(user.depotId);
+      return sql`${vehiclesAtDepot(user.depotId)} and ${published}`;
     case 'dispatcher':
       return user.depotId === null ? allow : vehiclesAtDepot(user.depotId);
     case 'store_manager':
@@ -47,7 +50,7 @@ function tripScope(user: User): SQL {
         select ${tripStops.tripId} from ${tripStops}
         inner join ${orders} on ${orders.id} = ${tripStops.orderId}
         where ${orders.outletId} = ${user.outletId}
-      )`;
+      ) and ${published}`;
   }
 }
 

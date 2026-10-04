@@ -21,7 +21,7 @@ import type {
   TemperatureRequirement,
   TripStatus,
 } from '@waypoint/shared';
-import { and, asc, eq, isNull, or, type SQL, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 import type { ArrivalFact, EtaStop } from './eta.ts';
 
 export type DeliveryDb = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -112,6 +112,8 @@ export interface DeliveryRepo {
   markArrived(db: DeliveryDb, stopId: string, late: boolean): Promise<boolean>;
   markStop(db: DeliveryDb, stopId: string, from: StopStatus, to: StopStatus): Promise<boolean>;
   markOrder(db: DeliveryDb, orderId: string, to: 'delivered' | 'failed'): Promise<boolean>;
+  /** Departed -> completed once no stop on the trip is still pending or arrived. */
+  completeTripIfDone(db: DeliveryDb, tripId: string): Promise<boolean>;
   findPod(db: DeliveryDb, stopId: string): Promise<PodRow | null>;
   failureReason(db: DeliveryDb, stopId: string): Promise<string | null>;
   insertPod(db: DeliveryDb, row: InsertPod): Promise<PodRow>;
@@ -236,6 +238,25 @@ export function createDeliveryRepo(): DeliveryRepo {
       return rows.length === 1;
     },
 
+    async completeTripIfDone(db, tripId) {
+      const rows = await db
+        .update(trips)
+        .set({ status: 'completed' })
+        .where(
+          and(
+            eq(trips.id, tripId),
+            eq(trips.status, 'departed'),
+            sql`not exists (
+              select 1 from ${tripStops}
+              where ${tripStops.tripId} = ${tripId}
+                and ${tripStops.status} in ('pending', 'arrived')
+            )`,
+          ),
+        )
+        .returning({ id: trips.id });
+      return rows.length === 1;
+    },
+
     async findPod(db, stopId) {
       const rows = await db
         .select({
@@ -320,6 +341,6 @@ function joinedStops(db: DeliveryDb) {
 
 function stopWhere(userScope: SQL, stopId: string, activeOnly: boolean): SQL | undefined {
   const filters = [eq(tripStops.id, stopId), userScope];
-  if (activeOnly) filters.push(eq(trips.status, 'departed'));
+  if (activeOnly) filters.push(inArray(trips.status, ['departed', 'completed']));
   return and(...filters);
 }

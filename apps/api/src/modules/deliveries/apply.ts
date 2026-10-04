@@ -9,6 +9,7 @@ import {
   type StopStatus,
   stopEventSchema,
   stopStateMachine,
+  tripStateMachine,
   type User,
 } from '@waypoint/shared';
 import type { AuditRecorder } from '../../plugins/audit.ts';
@@ -128,6 +129,22 @@ export async function applyStopEvent(
     },
     createdAt: serverTime,
   });
+  // The last outcome on a trip closes it (SYSTEM_DESIGN §5.3: Departed -> Completed).
+  if (input.type !== 'arrived' && tripStateMachine.canTransition(locked.tripStatus, 'completed')) {
+    const completed = await repo.completeTripIfDone(db, locked.tripId);
+    if (completed) {
+      await audit.record(db, {
+        actorId: driver.id,
+        role: driver.role,
+        action: 'trip.completed',
+        entityType: 'trip',
+        entityId: locked.tripId,
+        before: { status: locked.tripStatus },
+        after: { status: 'completed', lastStopId: locked.id },
+        createdAt: serverTime,
+      });
+    }
+  }
   return {
     outcome: 'applied',
     event: toEvent(inserted),

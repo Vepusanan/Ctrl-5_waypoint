@@ -185,7 +185,7 @@ function HomeDesktop({ home }: { home: Home }) {
           )}
           <p className="st-caption">
             {halves.length > 1
-              ? 'Chilled and dry are separate orders. Both go on the same van.'
+              ? 'Chilled and dry are separate orders. They can arrive on different vehicles.'
               : `Delivery window ${data.outlet.window.open}–${data.outlet.window.close}.`}
           </p>
         </section>

@@ -158,7 +158,11 @@ export function AutomaticRun({
             </Link>
           </CardHead>
           {data.changes.length === 0 && (
-            <p className="wp-muted">Every automatic change has been undone.</p>
+            <p className="wp-muted">
+              {data.placed > 0
+                ? 'Placements are not listed one by one. Undo run takes them all off again.'
+                : 'Every automatic change has been undone.'}
+            </p>
           )}
           {data.changes.map((change) => (
             <Row key={change.id} icon="zap" tone="info" title={change.title} detail={change.detail}>

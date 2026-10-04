@@ -182,6 +182,18 @@ describe('receipts and store issues', () => {
     expect(await database.db.select().from(receipts)).toHaveLength(0);
   });
 
+  it('refuses a discrepancy for an order that has not been delivered', async () => {
+    const pending = await insertDelivery({
+      outletId: 'OUT501',
+      stopStatus: 'pending',
+      orderStatus: 'dispatched',
+    });
+    const response = await postIssue(store.cookie, { orderId: pending.orderId, type: 'missing' });
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ error: { code: 'CONSTRAINT_VIOLATION' } });
+    expect(await database.db.select().from(issues)).toHaveLength(0);
+  });
+
   it('returns the existing receipt when confirmation is repeated', async () => {
     const delivery = await insertDelivery({
       outletId: 'OUT501',

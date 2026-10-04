@@ -122,6 +122,12 @@ export function createOrderService(
         const current = await lockedOrder(repo, tx, id, scope(manager).orders, version);
         await assertMutable(repo, tx, current, now);
         const changes = fieldChanges(input);
+        // A saved draft is sent the first time the store manager saves it (FR-ORD-002).
+        const submitting = current.status === 'draft';
+        if (submitting) {
+          orderStateMachine.assertTransition('draft', 'submitted');
+          changes.submittedAt = now;
+        }
         const nextDate = changes.requestedDate ?? current.requestedDate;
         const nextTemp = changes.temp ?? current.temp;
         if (
@@ -146,14 +152,16 @@ export function createOrderService(
         await audit.record(tx, {
           actorId: manager.id,
           role: manager.role,
-          action: 'order.edited',
+          action: submitting ? 'order.submitted' : 'order.edited',
           entityType: 'order',
           entityId: updated.id,
           before: orderSnapshot(toOrder(current)),
           after: orderSnapshot(updated),
           createdAt: now,
         });
-        pending.push(domainEvent('order.changed', updated, manager.id, now));
+        pending.push(
+          domainEvent(submitting ? 'order.submitted' : 'order.changed', updated, manager.id, now),
+        );
         return updated;
       });
       publish(events, pending);

@@ -21,7 +21,7 @@ test('four accounts share login, preserve cookies, enforce routes and server sco
     },
     { email: 'dispatcher@waypoint.test', home: '/dispatcher', heading: /Command/ },
     { email: 'loader@waypoint.test', home: '/loader', heading: /Assigned loads/ },
-    { email: 'driver@waypoint.test', home: '/driver', heading: /My Trips/ },
+    { email: 'driver@waypoint.test', home: '/driver', heading: /My trips/ },
   ];
   let foreignOrder = '';
   let storeOutlet = '';
@@ -58,9 +58,12 @@ test('four accounts share login, preserve cookies, enforce routes and server sco
       expect(other.status()).toBe(200);
       expect(orderListResponseSchema.parse(await other.json()).items).toHaveLength(0);
     } else if (user.role === 'dispatcher') {
+      // The service date lives in the account menu at the foot of the sidebar.
+      await page.getByRole('button', { name: 'Account menu' }).click();
       await expect(page.getByLabel('Service date')).toBeVisible();
       const date = await page.getByLabel('Service date').inputValue();
       expect(date).toBeTruthy();
+      await page.keyboard.press('Escape');
       expect((await page.request.get(`/api/v1/planning/runs/${date}/queue`)).status()).toBe(200);
       await page.goto(`/dispatcher/queue?date=${date}`);
       await expect(page.getByRole('heading', { name: /Planning queue/i })).toBeVisible();
@@ -95,7 +98,7 @@ test('four accounts share login, preserve cookies, enforce routes and server sco
         const foreignTrip = operationalTrips.find((trip) => trip.vehicleId !== user.vehicleId)?.id;
         await page.goto('/driver/trips');
         await page.reload();
-        await expect(page.getByRole('heading', { name: 'My Trips' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'My trips' })).toBeVisible();
         if (foreignTrip)
           expect(
             (
@@ -114,7 +117,20 @@ test('four accounts share login, preserve cookies, enforce routes and server sco
     await expect(page).toHaveURL(new RegExp(`${account.home}$`));
     await page.reload();
     await expect(page).toHaveURL(new RegExp(`${account.home}$`));
-    await page.getByRole('button', { name: 'Sign out', exact: true }).first().click();
+    // Each workspace keeps Sign out where its Figma shell puts it.
+    if (user.role === 'dispatcher') {
+      await page.getByRole('button', { name: 'Account menu' }).click();
+    } else if (user.role === 'store_manager') {
+      await page.getByRole('button', { name: 'Account', exact: true }).click();
+    } else if (user.role === 'loader') {
+      await page.goto('/loader/switch');
+    } else {
+      await page.goto('/driver/account');
+    }
+    await page
+      .getByRole('button', { name: /^Sign out|Someone else/ })
+      .first()
+      .click();
     await expect(page).toHaveURL(/\/login$/);
     expect((await page.request.get('/api/v1/auth/me')).status()).toBe(401);
   }

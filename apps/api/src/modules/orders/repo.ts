@@ -25,6 +25,8 @@ export interface OrderFieldChanges {
   units?: number;
   weightKg?: number;
   volumeM3?: number;
+  /** Set when saving sends a draft: the order becomes submitted at this instant. */
+  submittedAt?: Date;
 }
 
 interface OrderDraft {
@@ -228,6 +230,9 @@ export function createOrderRepo(): OrderRepo {
           ...(changes.units !== undefined ? { units: changes.units } : {}),
           ...(changes.weightKg !== undefined ? { weightKg: changes.weightKg } : {}),
           ...(changes.volumeM3 !== undefined ? { volumeM3: changes.volumeM3 } : {}),
+          ...(changes.submittedAt !== undefined
+            ? { status: 'submitted' as const, submittedAt: changes.submittedAt }
+            : {}),
           version: expectedVersion + 1,
         })
         .where(and(eq(orders.id, id), eq(orders.version, expectedVersion)))

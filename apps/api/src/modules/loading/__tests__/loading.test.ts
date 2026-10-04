@@ -285,7 +285,7 @@ describe('loading', () => {
     expect(tripRow[0]?.status).toBe('loading');
   });
 
-  it('marks Ready after the issue is acknowledged', async () => {
+  it('marks Ready only after the issue is acknowledged and the load is verified', async () => {
     const trip = await insertTrip();
     await start(trip.tripId);
     const created = await postIssue(trip.tripId, trip.orderIds[0] ?? missing('order'), 'missing');
@@ -295,6 +295,21 @@ describe('loading', () => {
       headers: { cookie: dispatcher.cookie },
     });
     expect(ack.statusCode).toBe(200);
+    const unverified = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${trip.tripId}/loading/ready`,
+      headers: { cookie: loader.cookie, 'if-match': '0' },
+    });
+    expect(unverified.statusCode).toBe(422);
+    expect(unverified.json()).toMatchObject({
+      error: { code: 'CONSTRAINT_VIOLATION', message: expect.stringContaining('Verify') },
+    });
+    const verified = await app.inject({
+      method: 'POST',
+      url: `/api/v1/trips/${trip.tripId}/loading/verify`,
+      headers: { cookie: loader.cookie, 'if-match': '0' },
+    });
+    expect(verified.statusCode).toBe(200);
     const response = await app.inject({
       method: 'POST',
       url: `/api/v1/trips/${trip.tripId}/loading/ready`,

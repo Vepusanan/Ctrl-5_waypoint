@@ -82,7 +82,7 @@ describe('planning', () => {
     app.clock.pin(new Date(PINNED));
   });
 
-  it('gives the dispatcher the confirmed planning queue for the depot and date', async () => {
+  it('gives the dispatcher confirmed and carried-over deferred orders for the depot and date', async () => {
     const served = await insertOrder({
       requestedDate: '2026-10-01',
       status: 'delivered',
@@ -116,7 +116,8 @@ describe('planning', () => {
     expect(body.depotId).toBe('Peliyagoda');
     expect(body.planVersion).toBe(0);
     expect(body.total).toBe(body.items.length);
-    expect(body.items.map((item) => item.id)).toEqual([ready]);
+    // The order deferred by the previous run returns to this run's queue.
+    expect(body.items.map((item) => item.id).sort()).toEqual([ready, previous].sort());
     expect(body.items.map((item) => item.id)).not.toContain(submitted);
     expect(body.items.map((item) => item.id)).not.toContain(otherDepot);
     expect(body.items.map((item) => item.id)).not.toContain(served);
@@ -486,6 +487,40 @@ describe('planning', () => {
         { id: deferred, status: 'deferred' },
       ]),
     );
+  });
+
+  it('serves an order deferred by the previous run when this run is published', async () => {
+    const carried = await insertOrder({ requestedDate: '2026-10-06', status: 'deferred' });
+    const history = await database.db
+      .insert(planningRuns)
+      .values({ depotId: 'Peliyagoda', serviceDate: '2026-10-06' })
+      .returning({ id: planningRuns.id });
+    const historyRunId = history[0]?.id;
+    if (historyRunId === undefined) throw new Error('Expected a history run');
+    await database.db.insert(deferrals).values({
+      orderId: carried,
+      runId: historyRunId,
+      reasonCode: 'WEIGHT_CAP',
+      type: 'prioritized',
+      note: 'Skipped yesterday',
+      actorId: dispatcher.user.id,
+    });
+    const allocated = await app.inject({
+      method: 'POST',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/auto-allocate`,
+      headers: { cookie: dispatcher.cookie, 'if-match': '0' },
+    });
+    expect(allocated.statusCode).toBe(200);
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/publish`,
+      headers: { cookie: dispatcher.cookie, 'if-match': '1' },
+    });
+    expect(response.statusCode).toBe(200);
+    const stored = await database.db.select().from(orders).where(eq(orders.id, carried));
+    expect(stored[0]?.status).toBe('allocated');
+    const stops = await database.db.select().from(tripStops);
+    expect(stops.map((stop) => stop.orderId)).toContain(carried);
   });
 
   it('rolls back a failed publish', async () => {

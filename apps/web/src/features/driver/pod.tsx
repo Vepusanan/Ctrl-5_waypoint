@@ -48,7 +48,7 @@ export function DeliveryForm({
   onSubmit,
 }: {
   stop: DeliveryStop;
-  /** The outlet's usual receiver, pre-filled so the driver only corrects it (DR04 note). */
+  /** A known receiver to pre-fill. Empty until the API returns one: a POD name is never invented. */
   recipient: string;
   busy: boolean;
   onSubmit: (pod: PodDraft) => void;

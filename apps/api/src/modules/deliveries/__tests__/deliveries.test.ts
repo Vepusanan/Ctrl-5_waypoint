@@ -183,6 +183,34 @@ describe('deliveries', () => {
     expect(stop.pod?.id).toBe(pod.id);
   });
 
+  it('completes the trip when its last stop has an outcome', async () => {
+    const trip = await insertTrip();
+    for (const [index, stopId] of trip.stopIds.entries()) {
+      const before = await database.db.select().from(trips).where(eq(trips.id, trip.tripId));
+      expect(before[0]?.status).toBe('departed');
+      await postEvent(driver.cookie, stopId, { type: 'arrived' });
+      if (index === 0) {
+        const pod = podSchema.parse(json(await postPod(driver.cookie, stopId), 201));
+        json(await postEvent(driver.cookie, stopId, { type: 'delivered', podId: pod.id }), 201);
+      } else {
+        json(
+          await postEvent(driver.cookie, stopId, { type: 'failed', reason: 'Outlet closed' }),
+          201,
+        );
+      }
+    }
+    const after = await database.db.select().from(trips).where(eq(trips.id, trip.tripId));
+    expect(after[0]?.status).toBe('completed');
+    const audit = await database.db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.entityId, trip.tripId));
+    expect(audit.map((row) => row.action)).toContain('trip.completed');
+    // The driver can still open a stop on the finished trip.
+    const stopId = trip.stopIds[0] ?? missing('stop');
+    expect((await getStop(driver.cookie, stopId)).statusCode).toBe(200);
+  });
+
   it('requires a reason before a delivery can fail', async () => {
     const trip = await insertTrip();
     const stopId = trip.stopIds[0] ?? missing('stop');

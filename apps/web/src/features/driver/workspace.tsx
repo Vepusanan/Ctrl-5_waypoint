@@ -54,7 +54,7 @@ interface DriverContextValue {
   route: { tripId: string; version: number } | null;
 }
 
-/** The API never marks a trip completed: a departed trip with every stop recorded is done. */
+/** Done on the server, or departed with every stop recorded on this phone but not synced yet. */
 export function tripFinished(trip: TripDetail): boolean {
   if (trip.status === 'completed') return true;
   return (

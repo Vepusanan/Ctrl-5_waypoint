@@ -31,16 +31,16 @@ describe('demo day', () => {
     expect(store?.outletId).toMatch(/^OUT\d{3}$/);
   });
 
-  it('gives the store manager an editable order before cutoff, drafts, and a free chilled slot', () => {
+  it('gives the store manager an editable order before cutoff, drafts, and a free slot', () => {
     const store = day.accounts.find((account) => account.role === 'store_manager');
     const storeOrders = day.orders.filter((order) => order.outletId === store?.outletId);
     const thisRun = storeOrders.filter((order) => order.requestedDate === DEMO_SERVICE_DATE);
     // Still open at the 15:50 demo start; the 4 PM cutoff confirms it into this run.
     expect(thisRun).toEqual([
-      expect.objectContaining({ temp: 'ambient', status: 'submitted', lockedAt: null }),
+      expect.objectContaining({ temp: 'chilled', status: 'submitted', lockedAt: null }),
     ]);
-    // The walkthrough places the store's Fresh chilled order for this run.
-    expect(thisRun.some((order) => order.temp === 'chilled')).toBe(false);
+    // The walkthrough places the store's Fresh dry order for this run.
+    expect(thisRun.some((order) => order.temp === 'ambient')).toBe(false);
     const drafts = storeOrders.filter((order) => order.status === 'draft');
     expect(drafts.map((order) => order.temp).sort()).toEqual(['ambient', 'chilled']);
     expect(drafts.every((order) => order.requestedDate > DEMO_SERVICE_DATE)).toBe(true);

@@ -1,4 +1,9 @@
-import { PlanningInputError, scoreOrder, validateVehicleDay } from '@waypoint/planning';
+import {
+  describeAssignment,
+  PlanningInputError,
+  scoreOrder,
+  validateVehicleDay,
+} from '@waypoint/planning';
 import {
   allocationResponseSchema,
   autoAllocateResponseSchema,
@@ -545,8 +550,18 @@ async function deferrals(date: string): Promise<z.infer<typeof deferralBoardSche
   });
   // Orders no trip can take come first, then the lowest priority.
   waiting.sort((left, right) => Number(left.fits) - Number(right.fits) || left.score - right.score);
+  // POST /deferrals only accepts the reason and type the planning engine gives the order, so the
+  // suggestion comes from the same engine. A draft that breaks a hard rule cannot be described.
+  const engine = new Map<string, { reason: ReasonCode; type: 'unavoidable' | 'prioritized' }>();
+  try {
+    const described = describeAssignment(snapshot.inputs.plan, draftsOf(snapshot.slots));
+    for (const row of described.deferred) engine.set(row.orderId, row);
+  } catch (error) {
+    if (!(error instanceof Error)) throw error;
+  }
   const candidates: DeferralCandidate[] = waiting.map(({ item, fits, block, score }, index) => {
-    const rule = block?.rule ?? 'WEIGHT_CAP';
+    const decided = engine.get(item.id);
+    const rule = decided?.reason ?? block?.rule ?? 'WEIGHT_CAP';
     return {
       orderId: item.id,
       reference: orderName(item.id),
@@ -587,7 +602,7 @@ async function deferrals(date: string): Promise<z.infer<typeof deferralBoardSche
       advice: fits ? 'serve' : 'defer',
       repeat: item.deferredYesterday,
       suggestedReason: rule,
-      suggestedType: fits ? 'prioritized' : 'unavoidable',
+      suggestedType: decided?.type ?? (fits ? 'prioritized' : 'unavoidable'),
       notice: `${reasonText[rule]} Your order moves to the run on ${until}.`,
     };
   });
@@ -608,7 +623,7 @@ async function deferrals(date: string): Promise<z.infer<typeof deferralBoardSche
         ? {
             label: 'Chilled orders without reefer space',
             count: chilled.length,
-            detail: `${chilled.length} chilled orders do not fit on the refrigerated fleet`,
+            detail: `${chilled.length} chilled ${chilled.length === 1 ? 'order does' : 'orders do'} not fit on the refrigerated fleet`,
             neededPercent: Math.round((chilledKg / reeferKg) * 100),
             capacityPercent: 100,
             capacityLabel: `${reefers.length} reefers · 2 trips each`,
@@ -807,7 +822,7 @@ async function review(date: string): Promise<z.infer<typeof planReviewSchema>> {
         state: waiting ? 'warn' : 'pass',
         title: 'Unallocated orders',
         detail: waiting
-          ? `${waiting} orders have no trip and no deferral yet`
+          ? `${waiting} ${waiting === 1 ? 'order has' : 'orders have'} no trip and no deferral yet`
           : 'Every order has a trip or a deferral',
       },
       {
@@ -815,7 +830,7 @@ async function review(date: string): Promise<z.infer<typeof planReviewSchema>> {
         state: repeat ? 'warn' : 'pass',
         title: 'Repeat deferrals',
         detail: repeat
-          ? `${repeat} orders are deferred for a second run in a row`
+          ? `${repeat} ${repeat === 1 ? 'order is' : 'orders are'} deferred for a second run in a row`
           : 'No order is deferred twice in a row',
       },
     ],

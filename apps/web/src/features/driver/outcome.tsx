@@ -5,7 +5,7 @@ import { Button, ErrorState } from '../../components/waypoint';
 import { message } from '../../lib/api';
 import { queryKeys } from '../../lib/query-keys';
 import { time } from '../store/shared';
-import { DISPATCH_OFFICE, outletContact, telHref } from './fixtures';
+import { DISPATCH_OFFICE, telHref } from './fixtures';
 import { cartons, FAILURE_REASONS, reasonIcon } from './labels';
 import { loadStop } from './offline/queries';
 import { DeliveryForm } from './pod';
@@ -121,7 +121,7 @@ export function StopOutcome() {
       {outcome === 'delivered' && !detail.pod && (
         <DeliveryForm
           stop={detail}
-          recipient={outletContact(detail.order.outletId).name}
+          recipient=""
           busy={busy}
           onSubmit={(pod) => action.mutate({ stop: detail, type: 'delivered', pod })}
         />

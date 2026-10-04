@@ -226,7 +226,7 @@ event stream, the notification feed and the demo clock.
 | D09b Recovery applied | `2042:3534` | same page, after acknowledging | Real API |
 | D09c Minor exception · acknowledge | `2106:12012` | same page | Fixture scenario only |
 | D10 Analytics & forecast | `2043:3400` | `/dispatcher/analytics` | Fixture |
-| D11 Orders & audit | `2043:4020` | `/dispatcher/orders` | Fixture |
+| D11 Orders & audit | `2043:4020` | `/dispatcher/orders` | Real API |
 | D12 Vehicle unavailable · replan | `2044:3828` | `/dispatcher/vehicles/:vehicleId/replan` | Fixture |
 | D13 Outlets | `2106:7017` | `/dispatcher/outlets` | Fixture |
 | D01-T Command center · tablet | `2045:4016` | `/dispatcher` at 801–1279px | as D01 |
@@ -281,11 +281,11 @@ client, or served by a fixture:
 | D09 | First event time; predicted finish; late risk; anomaly card | Bar from planned start to the last event; the rest not shown |
 | D09a–b | Recovery options that replan around a shortfall | One option: acknowledge and send short (the real action). It cannot be undone. |
 | D10 | `GET /analytics/forecast` | Fixture |
-| D11 | Order search for a dispatcher with references; `GET /orders/:id/audit` | Fixture |
+| D11 | Actor names, signature and photo images, received counts | `sources/orders.ts` reads `GET /orders` and `GET /audit`; actors show by role, images are left out |
 | D12 | `GET, POST /planning/runs/:date/replans/:vehicleId` | Fixture (VEH052 only) |
 | D13 | `GET /outlets/directory`, `GET /outlets/:code/profile` | Fixture |
 
-Fixture pages (D10–D13, D02a) show the Figma scenario, so their orders, outlets and vehicles are
+Fixture pages (D10, D12, D13, D02a) show the Figma scenario, so their orders, outlets and vehicles are
 not the ones in the database.
 
 ## 9. Open questions

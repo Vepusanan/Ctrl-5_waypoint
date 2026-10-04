@@ -42,6 +42,9 @@ pnpm db:seed
 pnpm dev                    # API on :3000, web on :5173 (proxies /api)
 ```
 
+If port 3000 is taken, start the API with `PORT=3100` and the web app with
+`API_PROXY_TARGET=http://localhost:3100`.
+
 Open http://localhost:5173. API docs: http://localhost:3000/api/docs.
 
 ## Full stack
@@ -82,11 +85,42 @@ An idempotent seed does not change existing passwords.
 | --- | --- | --- | --- |
 | Dispatcher | dispatcher@waypoint.test | Peliyagoda depot | /dispatcher |
 | Loader | loader@waypoint.test | Peliyagoda depot | /loader |
-| Driver | driver@waypoint.test | Seed-selected Peliyagoda van | /driver |
-| Store Manager | store.manager@waypoint.test | Seed-selected Fresh outlet | /store |
+| Driver | driver@waypoint.test | The reefer van kept available at Peliyagoda | /driver |
+| Store Manager | store.manager@waypoint.test | A van-only Fresh outlet, so its chilled order rides the driver's van | /store |
 
 With `DEMO_MODE=true`, startup sets the operating clock before the seeded service day’s cutoff so Store ordering remains usable. The seed report prints the actual vehicle/outlet assignments. Loader/Driver lists remain empty until a plan is published.
 `/dispatch` redirects to `/dispatcher` for existing links.
+
+## Walkthrough
+
+One order from the store to a confirmed receipt, using the four accounts above. Start from a
+fresh seed (Dispatcher → account menu "⋯" → Reset demo data).
+
+1. **Store Manager.** Place order → Dry tab → add a few cartons → Submit. The chilled order for
+   the same day is already open; both show as Submitted until the 16:00 cutoff.
+2. **Dispatcher.** Account menu → After cutoff. Planning queue now holds the confirmed orders and
+   the order deferred by the previous run.
+3. **Dispatcher.** Allocation → Automatic → Run automatic allocation. Switch to Assisted and try a
+   chilled order on a dry truck to see the validator refuse it.
+4. **Dispatcher.** Deferrals → tick the order no vehicle can take → write the justification →
+   Confirm. Review & publish → Publish.
+5. **Loader** (tablet width). Open VEH035 → Start loading → Report shortfall → Send. Ready is
+   blocked until the dispatcher answers.
+6. **Dispatcher.** Live operations → open the shortfall → Apply.
+7. **Loader.** Mark the stops loaded → Verify load → Confirm verification → Mark Ready.
+8. **Dispatcher.** Account menu → Service morning.
+9. **Driver** (phone width). Start trip → first stop → I've arrived → Record delivery → name,
+   signature → Complete delivery.
+10. **Driver, offline.** Switch the browser to offline, open the next stop, record the arrival and
+    an outcome. The header shows the pending count. Go online again: Sync shows every event as
+    Synced, and sending them twice changes nothing.
+11. **Store Manager.** Receipts shows the driver's proof of delivery. Report an issue on a line,
+    then Confirm receipt.
+12. **Dispatcher.** Orders & audit → search the outlet → the order's full event log, from the
+    cutoff to the receipt.
+
+`E2E_BASE_URL=<url> E2E_REAL_STACK=true pnpm e2e` runs this walkthrough in a browser
+(`e2e/tests/walkthrough.real.spec.ts`). It resets the demo data first.
 
 See [the authentication audit and repair report](docs/AUTH_FLOW_REPAIR.md) for architecture, scope checks, tests, and offline limitations.
 To verify the four real accounts, run `E2E_BASE_URL=http://localhost:8080 E2E_REAL_STACK=true pnpm e2e`

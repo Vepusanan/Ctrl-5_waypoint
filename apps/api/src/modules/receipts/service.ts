@@ -12,6 +12,7 @@ import { createReceiptRepo, type IssueRow, type ReceiptRepo, type ReceiptRow } f
 const MISSING_STOP = 'Stop not found';
 const MISSING_ORDER = 'Order not found';
 const MISSING_ISSUE = 'Issue not found';
+const ISSUE_BEFORE_DELIVERY = 'An issue can only be reported for a delivered order';
 const NOT_DELIVERED = 'Only a delivered stop can be receipt-confirmed';
 
 interface ConfirmedReceipt {
@@ -102,6 +103,10 @@ export function createReceiptService(
       const issue = await db.transaction(async (tx) => {
         const order = await repo.lockOrder(tx, scope(manager).orders, input.orderId);
         if (order === null) throw new ApiError('NOT_FOUND', MISSING_ORDER);
+        // SRS §28: a discrepancy is about goods that arrived, so it needs a delivery.
+        if (order.status !== 'delivered' && order.status !== 'receipt_confirmed') {
+          throw new ApiError('CONSTRAINT_VIOLATION', ISSUE_BEFORE_DELIVERY);
+        }
         const stopId = await repo.findStopId(tx, order.id);
         const now = clock.now();
         const saved = await repo.insertIssue(tx, {

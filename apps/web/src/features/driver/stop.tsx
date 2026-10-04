@@ -6,11 +6,10 @@ import { HttpError, message } from '../../lib/api';
 import { queryKeys } from '../../lib/query-keys';
 import { issueTypeLabel } from '../loader/labels';
 import { time } from '../store/shared';
-import { outletContact, telHref } from './fixtures';
 import { cartons, dockLabel } from './labels';
 import { loadStop, loadTrip } from './offline/queries';
 import type { OutboxEntry } from './offline/types';
-import { DriverHeader, DriverIcon, Glyph, InverseCard, ListRow, Strip, ThumbZone } from './shell';
+import { DriverHeader, DriverIcon, InverseCard, ListRow, Strip, ThumbZone } from './shell';
 import { StopSkeleton } from './skeletons';
 import { useDriverOutlets } from './trip';
 import { useDriver, useStopSync } from './workspace';
@@ -79,7 +78,6 @@ export function StopDetail() {
   }
   const detail = stop.data;
   const outlet = outlets.data?.items.find((item) => item.id === detail.order.outletId);
-  const contact = outletContact(detail.order.outletId);
   const arrival = local.entries.findLast(
     (entry) => entry.type === 'arrived' && entry.status !== 'conflict',
   );
@@ -104,15 +102,6 @@ export function StopDetail() {
         backLabel="Trip"
         eyebrow={`Stop ${detail.seq}${ordered.length ? ` of ${ordered.length}` : ''} · ${detail.order.outletId}`}
         title={place}
-        trailing={
-          <a
-            className="driver-round"
-            href={telHref(contact.phone)}
-            aria-label={`Call ${contact.name}`}
-          >
-            <Glyph name="phone" size={20} />
-          </a>
-        }
       />
 
       <InverseCard>
@@ -161,13 +150,16 @@ export function StopDetail() {
           detail={
             outlet?.mallWindow
               ? `Mall window ${outlet.mallWindow.open}–${outlet.mallWindow.close}`
-              : contact.access
+              : outlet
+                ? `Deliver between ${outlet.window.open} and ${outlet.window.close}`
+                : 'Delivery window not cached'
           }
         />
+        {/* The API has no outlet contact yet, so the row names the outlet, not an invented person. */}
         <ListRow
           icon={<DriverIcon name="user" size={20} />}
-          title={contact.name}
-          detail={contact.role}
+          title={`${detail.order.brand} outlet ${detail.order.outletId}`}
+          detail="Hand over to the staff member who signs"
         />
       </section>
 

@@ -225,6 +225,8 @@ function trip(runId: string, vehicleId: string, district: string) {
     tripNo: 1 as const,
     brand: 'Fresh' as const,
     district,
+    // Loader and driver only see trips once the plan is published.
+    status: 'published' as const,
     plannedMinutes: 40,
     plannedKm: 16,
   };

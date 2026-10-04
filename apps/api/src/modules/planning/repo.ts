@@ -31,7 +31,7 @@ import type {
   VehicleTemperature,
   VehicleType,
 } from '@waypoint/shared';
-import { and, asc, desc, eq, inArray, lt, type SQL, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, lte, or, type SQL, sql } from 'drizzle-orm';
 import { ApiError } from '../../plugins/errors.ts';
 
 export type PlanningDb = Database | Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -300,8 +300,21 @@ export function createPlanningRepo(): PlanningRepo {
         .innerJoin(outlets, eq(orders.outletId, outlets.id))
         .where(
           and(
-            eq(orders.requestedDate, serviceDate),
-            eq(orders.status, 'confirmed'),
+            or(
+              and(eq(orders.requestedDate, serviceDate), eq(orders.status, 'confirmed')),
+              // A deferred order returns to the next run's queue (SYSTEM_DESIGN §5.3). It waits
+              // for the first run after the one that deferred it.
+              and(
+                eq(orders.status, 'deferred'),
+                lte(orders.requestedDate, serviceDate),
+                sql`not exists (
+                  select 1 from ${deferrals}
+                  inner join ${planningRuns} on ${planningRuns.id} = ${deferrals.runId}
+                  where ${deferrals.orderId} = ${orders.id}
+                    and ${planningRuns.serviceDate} >= ${serviceDate}
+                )`,
+              ),
+            ),
             eq(outlets.depotId, depotId),
             userScope,
           ),
@@ -590,7 +603,7 @@ export function createPlanningRepo(): PlanningRepo {
         const updated = await db
           .update(orders)
           .set({ status: row.status, version: sql`${orders.version} + 1` })
-          .where(and(eq(orders.id, row.id), eq(orders.status, 'confirmed')))
+          .where(and(eq(orders.id, row.id), inArray(orders.status, ['confirmed', 'deferred'])))
           .returning({ id: orders.id });
         if (updated.length === 0) {
           throw new ApiError('VERSION_CONFLICT', 'Order changed during publish');

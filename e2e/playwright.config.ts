@@ -10,6 +10,8 @@ const externalBaseUrl = process.env.E2E_BASE_URL;
 export default defineConfig({
   testDir: './tests',
   forbidOnly: Boolean(process.env.CI),
+  // Real-stack specs share the four seeded accounts and one database, so they run one at a time.
+  ...(process.env.E2E_REAL_STACK === 'true' ? { workers: 1 } : {}),
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['html', { open: 'never' }], ['list']] : 'list',
   use: {

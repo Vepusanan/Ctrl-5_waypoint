@@ -422,7 +422,9 @@ export function createPlanningService(
             context.orders.map((order) => order.id),
           );
           for (const order of context.orders) {
-            if (locked.get(order.id) !== 'confirmed') {
+            const status = locked.get(order.id);
+            // Confirmed for this run, or deferred by an earlier run and carried into this one.
+            if (status !== 'confirmed' && status !== 'deferred') {
               throw new ApiError('VERSION_CONFLICT', 'Order changed during publish');
             }
           }
@@ -458,6 +460,7 @@ export function createPlanningService(
           const served = new Set(stored.flatMap((trip) => trip.stops.map((stop) => stop.orderId)));
           orderStateMachine.assertTransition('confirmed', 'allocated');
           orderStateMachine.assertTransition('confirmed', 'deferred');
+          orderStateMachine.assertTransition('deferred', 'allocated');
           await repo.markOrders(tx, [
             ...[...served].map((id) => ({ id, status: 'allocated' as const })),
             ...result.deferred.map((item) => ({ id: item.orderId, status: 'deferred' as const })),

@@ -78,9 +78,19 @@ export function buildDemoDay(reference: ReferenceData, serviceDate: string): Dem
   const fresh = reference.outlets
     .filter((outlet) => outlet.depotId === home && outlet.brand === 'Fresh')
     .sort(byId);
-  const store = fresh.find((outlet) => outlet.parkingConstraint === 'normal');
+  const driverVan = reference.vehicles
+    .filter((vehicle) => vehicle.depotId === home && vehicle.type === 'van')
+    .sort(byId)[0];
+  const vanOnlyFresh = fresh.find((outlet) => outlet.parkingConstraint === 'van_only');
+  // The four demo accounts must be able to finish one order end to end. A chilled order for a
+  // van_only outlet can only ride the one reefer van kept available, which is the driver's, so
+  // the store manager gets that outlet whenever the reference data has one.
+  const linked = vanOnlyFresh !== undefined && driverVan?.temp === 'reefer';
+  const store = linked
+    ? vanOnlyFresh
+    : fresh.find((outlet) => outlet.parkingConstraint === 'normal');
   const vanOnly =
-    fresh.find((outlet) => outlet.parkingConstraint === 'van_only') ??
+    vanOnlyFresh ??
     reference.outlets
       .filter((outlet) => outlet.depotId === home && outlet.parkingConstraint === 'van_only')
       .sort(byId)[0];
@@ -89,9 +99,6 @@ export function buildDemoDay(reference: ReferenceData, serviceDate: string): Dem
       (outlet) =>
         outlet.depotId === home && outlet.brand === 'Style' && outlet.mallWindowOpen !== null,
     )
-    .sort(byId)[0];
-  const driverVan = reference.vehicles
-    .filter((vehicle) => vehicle.depotId === home && vehicle.type === 'van')
     .sort(byId)[0];
   if (
     store === undefined ||
@@ -115,20 +122,22 @@ export function buildDemoDay(reference: ReferenceData, serviceDate: string): Dem
   const deferredOutlet =
     fresh.find((outlet) => outlet.id !== store.id && outlet.id !== vanOnly.id) ?? store;
   const orders: DemoOrder[] = [];
+  const storeTemp = linked ? 'chilled' : 'ambient';
 
   // The API allows one active order per outlet, date and temperature, so the seed keeps every
-  // slot distinct. The store manager's own outlet holds the walkthrough's moves: its ambient
-  // order for this run is still open at the 15:50 demo start and is confirmed at the 4 PM cutoff,
-  // and its chilled slot is left free for the order the walkthrough places.
+  // slot distinct. The store manager's own outlet holds the walkthrough's moves: one order for
+  // this run is still open at the 15:50 demo start and is confirmed at the 4 PM cutoff, and the
+  // other temperature's slot is left free for the order the walkthrough places. The open order
+  // is the chilled one when the outlet is tied to the driver's reefer van.
   for (const outlet of fresh) {
     if (outlet.id === store.id) {
       orders.push(
         orderRow(
           `order:${serviceDate}:submitted:${outlet.id}`,
           outlet,
-          'ambient',
+          storeTemp,
           serviceDate,
-          pickSize(reference.orderSizes, 'Fresh', 'ambient', rng),
+          pickSize(reference.orderSizes, 'Fresh', storeTemp, rng),
           'submitted',
           editableSubmittedAt,
           null,
