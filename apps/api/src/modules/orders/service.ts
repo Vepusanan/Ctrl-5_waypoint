@@ -17,6 +17,7 @@ import { scope } from '../../plugins/rbac.ts';
 import {
   colomboCutoffReached,
   colomboDate,
+  cutoffInstant,
   formatColomboTimestamp,
   isAtOrAfterCutoff,
 } from './cutoff.ts';
@@ -42,6 +43,16 @@ export interface OrderService {
   update(user: User | null, id: string, version: number, input: UpdateOrderRequest): Promise<Order>;
   cancel(user: User | null, id: string, version: number): Promise<Order>;
   lockConfirmedOrdersForRun(actor: User, serviceDate: string): Promise<Order[]>;
+  intakeForRun(actor: User, serviceDate: string): Promise<RunIntake>;
+}
+
+/** Whether stores can still change orders for a run, and how many submitted orders wait on it. */
+interface RunIntake {
+  /** 4:00 PM Asia/Colombo on the operating day before the service date (BR-001). */
+  cutoffAt: Date;
+  closed: boolean;
+  /** Submitted orders that become Confirmed, and join the run, at the cutoff. */
+  awaiting: number;
 }
 
 export function createOrderService(
@@ -203,14 +214,7 @@ export function createOrderService(
         throw new ApiError('FORBIDDEN', 'You do not have access to this action');
       }
       const now = clock.now();
-      const day = await repo.findCalendarDay(db, serviceDate);
-      if (day === null || !day.isOperating) {
-        throw new ApiError('VALIDATION_ERROR', 'Service date is not an operating day');
-      }
-      const previous = await repo.previousOperatingDate(db, serviceDate);
-      if (previous === null) {
-        throw new ApiError('VALIDATION_ERROR', 'Service date has no previous operating day');
-      }
+      const previous = await cutoffDay(repo, db, serviceDate);
       if (!isAtOrAfterCutoff(now, previous)) return [];
 
       const pending: DomainEvent[] = [];
@@ -261,7 +265,36 @@ export function createOrderService(
       publish(events, pending);
       return locked;
     },
+
+    async intakeForRun(actor, serviceDate) {
+      if (actor.role !== 'dispatcher') {
+        throw new ApiError('FORBIDDEN', 'You do not have access to this action');
+      }
+      const previous = await cutoffDay(repo, db, serviceDate);
+      const submitted = await repo.list(db, scope(actor).orders, {
+        status: 'submitted',
+        requestedDate: serviceDate,
+      });
+      return {
+        cutoffAt: cutoffInstant(previous),
+        closed: isAtOrAfterCutoff(clock.now(), previous),
+        awaiting: submitted.length,
+      };
+    },
   };
+}
+
+/** The operating day whose 4:00 PM cutoff closes the run for `serviceDate`. */
+async function cutoffDay(repo: OrderRepo, db: OrderDb, serviceDate: string): Promise<string> {
+  const day = await repo.findCalendarDay(db, serviceDate);
+  if (day === null || !day.isOperating) {
+    throw new ApiError('VALIDATION_ERROR', 'Service date is not an operating day');
+  }
+  const previous = await repo.previousOperatingDate(db, serviceDate);
+  if (previous === null) {
+    throw new ApiError('VALIDATION_ERROR', 'Service date has no previous operating day');
+  }
+  return previous;
 }
 
 function assertReader(user: User | null): User {

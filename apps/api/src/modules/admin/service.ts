@@ -10,21 +10,27 @@ import type { AuditRecorder } from '../../plugins/audit.ts';
 import type { OperatingClock } from '../../plugins/clock.ts';
 import { ApiError } from '../../plugins/errors.ts';
 import { formatColomboTimestamp } from '../orders/cutoff.ts';
-import { type AdminRepo, createAdminRepo, DEMO_DISPATCHER_EMAIL } from './repo.ts';
+import { type AdminRepo, CLOCK_SET, createAdminRepo, DEMO_DISPATCHER_EMAIL } from './repo.ts';
 
 // DEMO_MODE runs on the seeded day, not the host date (SYSTEM_DESIGN §12.2). The demo opens
 // ten minutes before the 4 PM cutoff that closes the seeded run, so the editable seeded
 // orders can still change and the dispatcher can move the clock past the cutoff on cue.
 const DEMO_START_TIME = '15:50:00.000';
 
-/** Pins the operating clock to the seeded demo start. Returns null when nothing is seeded. */
+/**
+ * Pins the operating clock where the demo left it: the time the dispatcher last moved it to, or
+ * the seeded demo start when it has not moved since the seed. The pin itself lives in memory, so
+ * without this a restart (a free host sleeps when idle) would put a published plan back before
+ * its own cutoff. Returns null when nothing is seeded.
+ */
 export async function startDemoClock(
-  repo: Pick<AdminRepo, 'findSeededDay'>,
+  repo: Pick<AdminRepo, 'findSeededDay' | 'lastClockMove'>,
   clock: OperatingClock,
 ): Promise<string | null> {
   const day = await repo.findSeededDay();
   if (day === null) return null;
-  const start = new Date(`${day.cutoffDate}T${DEMO_START_TIME}+05:30`);
+  const start =
+    (await repo.lastClockMove()) ?? new Date(`${day.cutoffDate}T${DEMO_START_TIME}+05:30`);
   clock.pin(start);
   return formatColomboTimestamp(start);
 }
@@ -37,7 +43,7 @@ export interface DemoSeedConfig {
 
 export interface AdminService {
   readClock(): OperatingClockBody;
-  setClock(input: OperatingClockBody): OperatingClockBody;
+  setClock(user: User | null, input: OperatingClockBody): Promise<OperatingClockBody>;
   reset(user: User | null, input: SeedResetRequest): Promise<SeedResetResponse>;
 }
 
@@ -54,13 +60,27 @@ export function createAdminService(
       return { now: formatColomboTimestamp(clock.now()) };
     },
 
-    setClock(input) {
+    async setClock(user, input) {
+      if (user === null) throw new ApiError('UNAUTHENTICATED', 'Sign in required');
       const pinned = new Date(input.now);
       if (Number.isNaN(pinned.getTime())) {
         throw new ApiError('VALIDATION_ERROR', 'Operating time is invalid');
       }
+      const before = formatColomboTimestamp(clock.now());
+      const now = formatColomboTimestamp(pinned);
+      // Recorded before the pin moves, so a restart always finds the move it has to restore.
+      await audit.record(db, {
+        actorId: user.id,
+        role: user.role,
+        action: CLOCK_SET,
+        entityType: 'clock',
+        entityId: 'operating',
+        before: { now: before },
+        after: { now },
+        createdAt: pinned,
+      });
       clock.pin(pinned);
-      return { now: formatColomboTimestamp(pinned) };
+      return { now };
     },
 
     async reset(user, input) {

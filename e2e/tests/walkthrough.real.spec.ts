@@ -25,9 +25,19 @@ const desktop = { width: 1440, height: 900 };
 const tablet = { width: 1180, height: 820 };
 const phone = { width: 390, height: 844 };
 
+// A navigation straight after the click would cancel the request, so wait for the clock to move.
+function clockMoved(page: Page) {
+  return page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/admin/clock') && response.request().method() === 'PUT',
+  );
+}
+
 async function clockPreset(page: Page, name: string): Promise<void> {
   await page.getByRole('button', { name: 'Account menu' }).click();
+  const moved = clockMoved(page);
   await page.getByRole('button', { name, exact: true }).click();
+  expect((await moved).status()).toBe(200);
 }
 
 test('one order travels from the store to a confirmed receipt across all four roles', async ({
@@ -53,8 +63,16 @@ test('one order travels from the store to a confirmed receipt across all four ro
   await expect(store.getByRole('heading', { name: 'Order received' })).toBeVisible();
 
   // 2. Dispatcher closes the run, allocates, records the deferral and publishes.
+  // Before the cutoff the store's orders are not in the queue yet, and the dispatcher is told so.
   dispatcher = await signIn(browser, 'dispatcher', desktop);
-  await clockPreset(dispatcher, 'After cutoff');
+  await expect(dispatcher.getByText(/2 submitted orders are still editable/)).toBeVisible();
+  await dispatcher.goto('/dispatcher/review');
+  await expect(dispatcher.getByText('Order cutoff', { exact: true })).toBeVisible();
+  await expect(dispatcher.getByRole('button', { name: /Publish plan/ })).toBeDisabled();
+  const closed = clockMoved(dispatcher);
+  await dispatcher.getByRole('button', { name: /Close orders now/ }).click();
+  expect((await closed).status()).toBe(200);
+  await expect(dispatcher.getByText(/still editable/)).toHaveCount(0);
   await dispatcher.goto('/dispatcher/allocate');
   await dispatcher.getByText('Automatic', { exact: true }).click();
   await dispatcher.getByRole('button', { name: 'Run automatic allocation' }).click();
@@ -80,6 +98,11 @@ test('one order travels from the store to a confirmed receipt across all four ro
     .last()
     .click();
   await expect(dispatcher.getByText(/Plan v\d+ is live/)).toBeVisible();
+  // The planning pages name the plan as published, not as a draft.
+  await dispatcher.goto('/dispatcher/validation');
+  await expect(dispatcher.getByText(/Plan v\d+ published/)).toBeVisible();
+  await dispatcher.goto('/dispatcher/deferrals');
+  await expect(dispatcher.getByText(/Plan v\d+ published/)).toBeVisible();
 
   // 3. Loader starts the van's load and reports a shortfall. Ready waits for the dispatcher.
   const loader = await signIn(browser, 'loader', tablet);

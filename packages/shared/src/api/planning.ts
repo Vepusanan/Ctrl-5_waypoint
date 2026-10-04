@@ -55,9 +55,19 @@ export const planningQueueItemSchema = orderSchema
   });
 export type PlanningQueueItem = z.infer<typeof planningQueueItemSchema>;
 
+// Stores can change orders until 4:00 PM on the operating day before the run (BR-001). Until then
+// submitted orders are not in the queue yet, so the dispatcher is told how many are still to come.
+export const runIntakeSchema = z.object({
+  cutoffAt: timestampSchema,
+  closed: z.boolean(),
+  awaiting: z.int().nonnegative(),
+});
+export type RunIntake = z.infer<typeof runIntakeSchema>;
+
 export const planningQueueResponseSchema = listResponseSchema(planningQueueItemSchema).extend({
   depotId: depotIdSchema,
   planVersion: versionSchema,
+  intake: runIntakeSchema,
 });
 export type PlanningQueueResponse = z.infer<typeof planningQueueResponseSchema>;
 

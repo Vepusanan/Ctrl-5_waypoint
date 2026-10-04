@@ -17,7 +17,7 @@ export function colomboCutoffReached(instant: Date): boolean {
   return formatColomboTimestamp(instant).slice(11, 23) >= CUTOFF_TIME;
 }
 
-function cutoffInstant(previousOperatingDate: string): Date {
+export function cutoffInstant(previousOperatingDate: string): Date {
   return new Date(`${previousOperatingDate}T${CUTOFF_TIME}+05:30`);
 }
 

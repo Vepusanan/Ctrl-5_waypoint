@@ -4,6 +4,7 @@ import {
   type PlanningQueueItem,
   planningQueueResponseSchema,
   type ReasonCode,
+  type RunIntake,
   serviceAllowanceListResponseSchema,
   type TripDetail,
   tripListResponseSchema,
@@ -23,6 +24,8 @@ export interface Snapshot {
   depotId: string;
   version: number;
   published: boolean;
+  /** Whether stores can still change this run's orders, and how many wait for the cutoff. */
+  intake: RunIntake;
   items: PlanningQueueItem[];
   byId: Map<string, PlanningQueueItem>;
   vehicles: VehicleReference[];
@@ -109,6 +112,7 @@ async function load(date: string, depotId: string): Promise<Snapshot> {
     depotId,
     version: queue.planVersion,
     published: trips.items.some((trip) => trip.run.status === 'published'),
+    intake: queue.intake,
     items,
     byId: new Map(items.map((item) => [item.id, item])),
     vehicles: vehicles.items,

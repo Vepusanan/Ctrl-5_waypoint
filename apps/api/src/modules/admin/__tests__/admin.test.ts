@@ -298,7 +298,7 @@ describe('demo admin', () => {
     }
   }, 90_000);
 
-  it('starts the demo clock before the cutoff that closes the seeded run', async () => {
+  it('starts the demo clock before the cutoff, and restores a moved clock after a restart', async () => {
     const [meta] = await app.db.select().from(seedMeta);
     if (meta === undefined) throw new Error('Expected seed metadata');
     const [cutoffDay] = await app.db
@@ -308,25 +308,27 @@ describe('demo admin', () => {
       .orderBy(desc(calendarDays.date))
       .limit(1);
     const start = `${cutoffDay?.date}T15:50:00.000+05:30`;
+    const readClock = async (cookie: string) =>
+      (await app.inject({ method: 'GET', url: '/api/v1/admin/clock', headers: { cookie } })).json();
 
+    // Earlier tests moved the clock; a fresh seed has no recorded move.
+    const first = await signIn(app, DEMO_USERS.dispatcher.email);
+    expect((await reset(app, first)).statusCode).toBe(200);
     expect(await startDemoClock(createAdminRepo(app.db), app.clock)).toBe(start);
     const dispatcher = await signIn(app, DEMO_USERS.dispatcher.email);
-    const read = await app.inject({
-      method: 'GET',
-      url: '/api/v1/admin/clock',
-      headers: { cookie: dispatcher },
-    });
-    expect(read.json()).toEqual({ now: start });
+    expect(await readClock(dispatcher)).toEqual({ now: start });
 
-    await setClock(app, dispatcher, `${cutoffDay?.date}T16:05:00.000+05:30`);
+    // A restart loses the in-memory pin. The last recorded move wins, even a move back in time.
+    const afterCutoff = `${cutoffDay?.date}T16:05:00.000+05:30`;
+    await setClock(app, dispatcher, `${meta.serviceDate}T03:30:00.000+05:30`);
+    await setClock(app, dispatcher, afterCutoff);
+    app.clock.unpin();
+    expect(await startDemoClock(createAdminRepo(app.db), app.clock)).toBe(afterCutoff);
+    expect(await readClock(dispatcher)).toEqual({ now: afterCutoff });
+
     expect((await reset(app, dispatcher)).statusCode).toBe(200);
     const again = await signIn(app, DEMO_USERS.dispatcher.email);
-    const afterReset = await app.inject({
-      method: 'GET',
-      url: '/api/v1/admin/clock',
-      headers: { cookie: again },
-    });
-    expect(afterReset.json()).toEqual({ now: start });
+    expect(await readClock(again)).toEqual({ now: start });
   }, 90_000);
 
   it('leaves the admin endpoints unregistered when demo mode is off', async () => {

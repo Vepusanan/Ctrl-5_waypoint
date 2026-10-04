@@ -35,7 +35,13 @@ test('a published plan survives a lost vehicle, and each driver sees only their 
   await dispatcher.context().close();
   dispatcher = await signIn(browser, 'dispatcher', desktop);
   await dispatcher.getByRole('button', { name: 'Account menu' }).click();
+  // A navigation straight after the click would cancel the request, so wait for the clock to move.
+  const moved = dispatcher.waitForResponse(
+    (response) =>
+      response.url().endsWith('/api/v1/admin/clock') && response.request().method() === 'PUT',
+  );
   await dispatcher.getByRole('button', { name: 'After cutoff', exact: true }).click();
+  expect((await moved).status()).toBe(200);
 
   // An empty plan cannot be published: the button is off and the check says why.
   await dispatcher.goto('/dispatcher/review');

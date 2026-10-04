@@ -2,6 +2,10 @@
 import type { ReactNode } from 'react';
 import { Icon, ProgressBar, type Tone } from '../../components/waypoint';
 
+/** "draft" until the run is published, then "published": page headers name the plan's state. */
+export const planState = (run: { published: boolean } | undefined) =>
+  run?.published ? 'published' : 'draft';
+
 /** Card heading row: optional icon, title, and actions on the right. */
 export function CardHead({
   title,

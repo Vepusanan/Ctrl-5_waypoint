@@ -9,6 +9,7 @@ import {
   deferralTypeSchema,
   isoDateSchema,
   reasonCodeSchema,
+  runIntakeSchema,
   temperatureRequirementSchema,
   timestampSchema,
   timeWindowSchema,
@@ -31,6 +32,10 @@ export const dispatchRunSchema = z.object({
   now: timestampSchema,
   depots: z.array(z.string().min(1)).min(1),
   planning: z.object({ opensAt: timestampSchema, publishBy: timestampSchema }),
+  /** Order intake for this run: open until the cutoff, with the submitted orders still to join. */
+  intake: runIntakeSchema,
+  /** The run's plan is published: its version is the live plan, not a draft. */
+  published: z.boolean(),
   counts: z.object({
     queue: count,
     hardViolations: count,

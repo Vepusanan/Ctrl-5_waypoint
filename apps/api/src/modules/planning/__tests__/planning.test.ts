@@ -155,13 +155,20 @@ describe('planning', () => {
         headers: { cookie: dispatcher.cookie },
       });
 
-    // PINNED is 10:00 on the cutoff day, so the order is still open to the store.
+    // PINNED is 10:00 on the cutoff day, so the order is still open to the store. The queue
+    // leaves it out and says one order is still to come.
     const before = planningQueueResponseSchema.parse(json(await queue(), 200));
     expect(before.items.map((item) => item.id)).not.toContain(submitted);
+    expect(before.intake).toEqual({
+      cutoffAt: '2026-10-06T16:00:00.000+05:30',
+      closed: false,
+      awaiting: 1,
+    });
 
     app.clock.pin(new Date('2026-10-06T16:00:00.000+05:30'));
     const after = planningQueueResponseSchema.parse(json(await queue(), 200));
     expect(after.items.map((item) => item.id)).toEqual([submitted]);
+    expect(after.intake).toMatchObject({ closed: true, awaiting: 0 });
     expect(after.items[0]).toMatchObject({
       status: 'confirmed',
       lockedAt: '2026-10-06T16:00:00.000+05:30',
@@ -783,6 +790,41 @@ describe('planning', () => {
     // The refused publish rolls back, so no run is left published.
     const runs = await database.db.select().from(planningRuns);
     expect(runs.every((run) => run.status === 'open')).toBe(true);
+  });
+
+  it('refuses to publish while submitted orders still wait for the cutoff', async () => {
+    await insertOrder();
+    const waiting = await insertOrder({ outletId: 'OUT201', temp: 'chilled', status: 'submitted' });
+    const allocated = await app.inject({
+      method: 'POST',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/auto-allocate`,
+      headers: { cookie: dispatcher.cookie, 'if-match': '0' },
+    });
+    expect(allocated.statusCode).toBe(200);
+    const publish = (version: number) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/planning/runs/${SERVICE_DATE}/publish`,
+        headers: { cookie: dispatcher.cookie, 'if-match': String(version) },
+      });
+
+    // PINNED is before the cutoff: publishing now would leave the submitted order out for good.
+    const early = await publish(1);
+    expect(early.statusCode).toBe(422);
+    expect(early.json()).toMatchObject({
+      error: {
+        code: 'CONSTRAINT_VIOLATION',
+        message: expect.stringContaining('1 submitted order joins the run at the cutoff'),
+      },
+    });
+    const runs = await database.db.select().from(planningRuns);
+    expect(runs.every((run) => run.status === 'open')).toBe(true);
+
+    // After the cutoff the order is confirmed into the run, and the plan can be published.
+    app.clock.pin(new Date('2026-10-06T16:00:00.000+05:30'));
+    expect((await publish(1)).statusCode).toBe(200);
+    const stored = await database.db.select().from(orders).where(eq(orders.id, waiting));
+    expect(stored[0]?.status).not.toBe('submitted');
   });
 
   it('replans a published run when its vehicle is lost', async () => {

@@ -34,10 +34,3 @@ export function nextRun(date: string): string {
   following.setUTCDate(following.getUTCDate() + 1);
   return following.toISOString().slice(0, 10);
 }
-
-/** The calendar day before `date`. */
-export function previousDay(date: string): string {
-  const before = new Date(`${date}T12:00:00Z`);
-  before.setUTCDate(before.getUTCDate() - 1);
-  return before.toISOString().slice(0, 10);
-}

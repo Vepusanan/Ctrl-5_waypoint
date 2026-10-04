@@ -84,7 +84,13 @@ test('sign-in and dispatcher layouts fit desktop, tablet and phone; login and qu
         json: { error: { code: 'NOT_FOUND', message: 'Unavailable' } },
       });
     else if (path.endsWith('/queue'))
-      json = { items: orders, total: orders.length, depotId: 'Peliyagoda', planVersion: 1 };
+      json = {
+        items: orders,
+        total: orders.length,
+        depotId: 'Peliyagoda',
+        planVersion: 1,
+        intake: { cutoffAt: '2026-10-01T16:00:00.000+05:30', closed: true, awaiting: 0 },
+      };
     else if (path.endsWith('/dashboard/summary'))
       json = {
         date,

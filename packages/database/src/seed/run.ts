@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { addCalendarDays, CALENDAR_HORIZON_DAYS, withCalendarHorizon } from '../calendar.ts';
 import type { Database } from '../client.ts';
 import { auditLog } from '../schema/cross-cutting.ts';
@@ -17,7 +17,7 @@ import {
 } from '../schema/reference.ts';
 import { seedMeta } from '../schema/seed-meta.ts';
 import { RNG_SEED, SEED_META_ID, SEED_VERSION } from './constants.ts';
-import { buildDemoDay, resolveServiceDate } from './demo-day.ts';
+import { buildDemoDay, type DemoDay, resolveServiceDate } from './demo-day.ts';
 import { seedUuid } from './ids.ts';
 import { loadReference, referenceRoots } from './load-reference.ts';
 import { hashSeedPassword } from './password.ts';
@@ -76,6 +76,8 @@ export interface SeedOptions {
   demoDate?: string;
   password: string;
   reference?: ReferenceData;
+  /** Folders searched for the source CSVs, in place of DATA_DIR and the repository data folder. */
+  roots?: readonly string[];
 }
 
 export async function seedDatabase(db: Database, options: SeedOptions): Promise<SeedResult> {
@@ -95,23 +97,16 @@ export async function seedDatabase(db: Database, options: SeedOptions): Promise<
 
   const loaded =
     options.reference ??
-    (await loadReference(referenceRoots(options.dataDir, options.cwd ?? process.cwd())));
-  // The demo day may sit at, or past, the end of the supplied calendar. Days after it are
-  // generated, so there is always a next run to order for.
-  const lastLoaded = loaded.calendarDays.reduce(
-    (latest, day) => (day.date > latest ? day.date : latest),
-    '',
-  );
-  const anchor = [lastLoaded, options.demoDate ?? ''].sort().at(-1) ?? lastLoaded;
-  const reference = {
-    ...loaded,
-    calendarDays: withCalendarHorizon(
-      loaded.calendarDays,
-      addCalendarDays(anchor, CALENDAR_HORIZON_DAYS),
-    ),
-  };
-  const serviceDate = resolveServiceDate(reference.calendarDays, options.demoDate);
-  const day = buildDemoDay(reference, serviceDate);
+    (await loadReference(
+      options.roots ?? referenceRoots(options.dataDir, options.cwd ?? process.cwd()),
+    ));
+  // A host without the source CSVs (the hosted container) must not turn a database seeded from
+  // the dataset into the synthetic fixture on reset. It restores the day that seed stored.
+  const kept =
+    options.reference === undefined && options.reset === true && loaded.source === 'synthetic'
+      ? await datasetBaseline(db)
+      : null;
+  const { reference, day } = kept ?? freshSeed(loaded, options.demoDate);
   const passwordHash = await hashSeedPassword(options.password);
 
   const applied = await db.transaction(async (tx) => {
@@ -149,6 +144,17 @@ export async function seedDatabase(db: Database, options: SeedOptions): Promise<
     await tx.insert(planningRuns).values(day.planningRuns);
     await tx.insert(deferrals).values(day.deferral);
     await tx.insert(auditLog).values(day.audit);
+    if (reference.source === 'dataset') {
+      await tx.insert(auditLog).values({
+        actorId: day.audit.actorId,
+        role: day.audit.role,
+        action: BASELINE_ACTION,
+        entityType: 'seed',
+        entityId: 'waypoint',
+        after: JSON.parse(JSON.stringify(day)),
+        createdAt: day.audit.createdAt,
+      });
+    }
     await tx.insert(seedMeta).values({
       id: SEED_META_ID,
       seedVersion: SEED_VERSION,
@@ -184,6 +190,74 @@ export async function seedDatabase(db: Database, options: SeedOptions): Promise<
       email: account.email,
       scope: scopeLabel(account),
     })),
+  };
+}
+
+function freshSeed(
+  loaded: ReferenceData,
+  demoDate: string | undefined,
+): { reference: ReferenceData; day: DemoDay } {
+  // The demo day may sit at, or past, the end of the supplied calendar. Days after it are
+  // generated, so there is always a next run to order for.
+  const lastLoaded = loaded.calendarDays.reduce(
+    (latest, day) => (day.date > latest ? day.date : latest),
+    '',
+  );
+  const anchor = [lastLoaded, demoDate ?? ''].sort().at(-1) ?? lastLoaded;
+  const reference = {
+    ...loaded,
+    calendarDays: withCalendarHorizon(
+      loaded.calendarDays,
+      addCalendarDays(anchor, CALENDAR_HORIZON_DAYS),
+    ),
+  };
+  const serviceDate = resolveServiceDate(reference.calendarDays, demoDate);
+  return { reference, day: buildDemoDay(reference, serviceDate) };
+}
+
+// The seeded demo day, kept beside a dataset seed so a reset can rebuild it without the CSVs.
+const BASELINE_ACTION = 'seed.baseline';
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+/**
+ * The dataset-seeded day read back from this database: reference tables as they are, and the
+ * demo day the seed stored. Null when the database was not seeded from the dataset, so the
+ * synthetic fixture applies as before.
+ */
+async function datasetBaseline(
+  db: Database,
+): Promise<{ reference: ReferenceData; day: DemoDay } | null> {
+  const [meta] = await db.select().from(seedMeta).where(eq(seedMeta.id, SEED_META_ID));
+  if (meta?.source !== 'dataset') return null;
+  const [stored] = await db
+    .select({ after: auditLog.after })
+    .from(auditLog)
+    .where(and(eq(auditLog.action, BASELINE_ACTION), eq(auditLog.entityType, 'seed')))
+    .orderBy(desc(auditLog.id))
+    .limit(1);
+  if (stored?.after == null) {
+    throw new Error(
+      'This database was seeded from the dataset before resets could run without it. Seed it once more from a machine that has the CSVs: pnpm db:seed --reset',
+    );
+  }
+  // JSON turned the timestamps into strings; date-only columns stay strings.
+  const day = JSON.parse(JSON.stringify(stored.after), (_key, value) =>
+    typeof value === 'string' && TIMESTAMP.test(value) ? new Date(value) : value,
+  ) as DemoDay;
+  return {
+    day,
+    reference: {
+      source: 'dataset',
+      depots: await db.select().from(depots),
+      outlets: await db.select().from(outlets),
+      vehicles: await db.select().from(vehicles),
+      calendarDays: await db.select().from(calendarDays),
+      districtTravel: await db.select().from(districtTravel),
+      serviceAllowances: await db.select().from(serviceAllowances),
+      demandHistory: await db.select().from(demandHistory),
+      // Only the generator reads order sizes, and the stored day replaces it.
+      orderSizes: [],
+    },
   };
 }
 

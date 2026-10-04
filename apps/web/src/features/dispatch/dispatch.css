@@ -910,6 +910,12 @@
 .dispatch-demo-clock p {
   margin: 0;
 }
+.dispatch-intake {
+  margin-bottom: var(--space-16);
+}
+.dispatch-intake .wp-banner button {
+  flex: none;
+}
 /* Dispatcher notification feed (top bar bell). */
 .dispatch-notices {
   display: grid;

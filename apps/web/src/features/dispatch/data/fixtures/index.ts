@@ -22,6 +22,8 @@ const run = (): DispatchRun => ({
   now: scenarioNow(),
   depots: ['Peliyagoda DC', 'Kandy hub'],
   planning: { opensAt: '2026-09-25T16:00:00+05:30', publishBy: '2026-09-25T18:00:00+05:30' },
+  intake: { cutoffAt: '2026-09-25T16:00:00+05:30', closed: true, awaiting: 0 },
+  published: false,
   counts: {
     queue: state.orders.length,
     hardViolations: report().violations.length,

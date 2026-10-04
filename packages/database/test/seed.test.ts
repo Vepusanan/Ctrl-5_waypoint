@@ -3,14 +3,17 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createDatabase, type Database } from '../src/client.ts';
 import { loadDatabaseEnv } from '../src/env.ts';
+import { auditLog } from '../src/schema/cross-cutting.ts';
 import { users } from '../src/schema/identity.ts';
 import { orders } from '../src/schema/orders.ts';
+import { planningRuns } from '../src/schema/planning.ts';
+import { outlets } from '../src/schema/reference.ts';
 import { seedMeta } from '../src/schema/seed-meta.ts';
 import { DEMO_SERVICE_DATE } from '../src/seed/constants.ts';
 import { parseCsv } from '../src/seed/csv.ts';
@@ -157,6 +160,65 @@ describe('database seed', () => {
     await close?.();
   });
 
+  it('restores a dataset seed on a host that does not have the CSVs', async () => {
+    // Stands in for the dataset: the hosted container is seeded from it but never holds the files.
+    const dataset = {
+      ...syntheticReference,
+      source: 'dataset' as const,
+      outlets: syntheticReference.outlets.map((outlet, index) =>
+        index === 0 ? { ...outlet, windowClose: '09:45:00' } : outlet,
+      ),
+    };
+    const seeded = await seedDatabase(db, {
+      reset: true,
+      password: 'waypoint-demo',
+      reference: dataset,
+      demoDate: DEMO_SERVICE_DATE,
+    });
+    expect(seeded.source).toBe('dataset');
+    const snapshot = async () => ({
+      orders: (await db.select().from(orders)).sort((a, b) => a.id.localeCompare(b.id)),
+      outlets: (await db.select().from(outlets)).sort((a, b) => a.id.localeCompare(b.id)),
+      users: (await db.select({ id: users.id, email: users.email }).from(users)).sort((a, b) =>
+        a.id.localeCompare(b.id),
+      ),
+      runs: (await db.select().from(planningRuns)).sort((a, b) => a.id.localeCompare(b.id)),
+      meta: (await db.select().from(seedMeta)).map((row) => [row.serviceDate, row.source]),
+    });
+    const before = await snapshot();
+
+    // A demo ran: orders moved on.
+    await db.update(orders).set({ status: 'cancelled' });
+
+    const nowhere = path.join(tmpdir(), `waypoint-no-data-${Date.now()}`);
+    for (let round = 0; round < 2; round += 1) {
+      const reset = await seedDatabase(db, {
+        reset: true,
+        password: 'waypoint-demo',
+        roots: [nowhere],
+      });
+      expect(reset).toMatchObject({ applied: true, source: 'dataset' });
+      expect(reset.serviceDate).toBe(DEMO_SERVICE_DATE);
+      expect(await snapshot()).toEqual(before);
+    }
+  });
+
+  it('refuses to replace a dataset seed that kept no baseline with the synthetic fixture', async () => {
+    // The audit log is append-only, so a database seeded before baselines existed is modelled
+    // by emptying it.
+    await db.execute(sql`truncate table audit_log`);
+    const before = await db.select().from(orders);
+    await expect(
+      seedDatabase(db, {
+        reset: true,
+        password: 'waypoint-demo',
+        roots: [path.join(tmpdir(), `waypoint-no-data-${Date.now()}`)],
+      }),
+    ).rejects.toThrow(/pnpm db:seed --reset/);
+    expect(await db.select().from(orders)).toHaveLength(before.length);
+    expect((await db.select().from(seedMeta))[0]?.source).toBe('dataset');
+  });
+
   it('is idempotent, and a reset restores the same operational ids', async () => {
     const first = await seedDatabase(db, {
       reset: true,
@@ -189,6 +251,11 @@ describe('database seed', () => {
     expect(after.map((order) => `${order.id}:${order.status}:${order.outletId}`).sort()).toEqual(
       before.map((order) => `${order.id}:${order.status}:${order.outletId}`).sort(),
     );
+
+    // No baseline is kept for a synthetic seed: a reset rebuilds it from the fixture.
+    expect(
+      await db.select().from(auditLog).where(eq(auditLog.action, 'seed.baseline')),
+    ).toHaveLength(0);
 
     const dispatcher = await db
       .select()

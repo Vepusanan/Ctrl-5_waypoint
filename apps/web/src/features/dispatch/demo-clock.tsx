@@ -5,6 +5,25 @@ import { Button } from '../../components/waypoint';
 import { api, message } from '../../lib/api';
 import { useAuth } from '../auth/auth';
 import { clockLabel } from '../store/shared';
+import { forgetPlans } from './data/sources/plan';
+
+/** Moves the operating clock (DEMO_MODE, PUT /admin/clock), then reloads every screen. */
+export function useMoveClock(onMoved?: () => void) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (at: string) =>
+      api('/admin/clock', operatingClockSchema, {
+        method: 'PUT',
+        body: JSON.stringify({ now: at }),
+      }),
+    onSuccess: async () => {
+      onMoved?.();
+      // Every screen reads the operating clock, so refetch everything.
+      forgetPlans();
+      await client.invalidateQueries();
+    },
+  });
+}
 
 // DEMO_MODE only (GET/PUT /admin/clock). Jumps the operating clock to the walkthrough's
 // moments around the selected run: before and after the 4 PM cutoff that closes it, and the
@@ -21,7 +40,6 @@ export function DemoClock({
   dates: readonly string[];
   onMoved: () => void;
 }) {
-  const client = useQueryClient();
   const { logout } = useAuth();
   const cutoffDay = dates.filter((day) => day < date).at(-1);
   const presets = [
@@ -43,18 +61,7 @@ export function DemoClock({
     // The API clears the session cookie as part of the reset; sign in again on the fresh seed.
     onSuccess: () => logout(),
   });
-  const move = useMutation({
-    mutationFn: (at: string) =>
-      api('/admin/clock', operatingClockSchema, {
-        method: 'PUT',
-        body: JSON.stringify({ now: at }),
-      }),
-    onSuccess: async () => {
-      onMoved();
-      // Every screen reads the operating clock, so refetch everything.
-      await client.invalidateQueries();
-    },
-  });
+  const move = useMoveClock(onMoved);
   return (
     <section className="dispatch-demo-clock" aria-label="Demo clock">
       <strong>Demo clock</strong>

@@ -90,7 +90,7 @@ function OrderStatus({ state }: { state: QueueOrder['state'] }) {
 }
 
 export function PlanningQueuePage() {
-  const { date, dates, setDate } = useDispatch();
+  const { date, dates, setDate, run } = useDispatch();
   const navigate = useNavigate();
   const queue = useQuery({
     queryKey: ['planning', date, 'queue'],
@@ -159,7 +159,7 @@ export function PlanningQueuePage() {
   return (
     <Page
       title="Planning queue"
-      description={`One queue for ${shortDay(date)} · closed at ${clock(queue.data.cutoffAt)}`}
+      description={`One queue for ${shortDay(date)} · ${run && !run.intake.closed ? 'open until' : 'closed at'} ${clock(queue.data.cutoffAt)}`}
       actions={
         <>
           <Dropdown

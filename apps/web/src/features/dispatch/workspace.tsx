@@ -17,7 +17,15 @@ import {
   useNavigate,
   useSearchParams,
 } from 'react-router-dom';
-import { Avatar, ErrorState, LoadingState, MaskIcon, PageHeader } from '../../components/waypoint';
+import {
+  Avatar,
+  Banner,
+  Button,
+  ErrorState,
+  LoadingState,
+  MaskIcon,
+  PageHeader,
+} from '../../components/waypoint';
 import { HttpError, api as http, message } from '../../lib/api';
 import { clock, shortDay } from '../../lib/format';
 import { SignOut } from '../auth/auth';
@@ -30,7 +38,7 @@ import { type DispatchRun, dispatchRunSchema } from './contracts';
 import { api } from './data/client';
 import { setDispatchSession } from './data/context';
 import { DeferralCenter } from './deferrals';
-import { DemoClock } from './demo-clock';
+import { DemoClock, useMoveClock } from './demo-clock';
 import { FleetTrips } from './fleet';
 import { StoreIssues } from './issues';
 import { LiveOperations } from './live';
@@ -174,12 +182,14 @@ export function DispatchWorkspaceApp({ user }: { user: Dispatcher }) {
   );
   const [params, setParams] = useSearchParams();
   const requested = params.get('date');
-  // Default to the next run after the operating clock's day, as the store does.
   const today = operating.data?.today;
   // Until the operating clock answers, the device date stands in. The calendar is generated
   // well ahead, so its last day is never the right default.
   const anchor = today ?? new Date().toISOString().slice(0, 10);
-  const nextRun = allDates.find((day) => day > anchor);
+  // The morning belongs to the run on the road, so the default is today's. From midday the
+  // dispatcher is planning the next run, as the store is ordering for it.
+  const onTheRoad = operating.data?.morning && allDates.includes(anchor) ? anchor : undefined;
+  const nextRun = onTheRoad ?? allDates.find((day) => day > anchor);
   const date =
     requested && allDates.includes(requested) ? requested : (nextRun ?? allDates.at(-1) ?? '');
   // The date picker offers the weeks around the operating day, not the whole calendar.
@@ -336,6 +346,14 @@ export function DispatchWorkspaceApp({ user }: { user: Dispatcher }) {
               description="A dispatcher needs a home depot before planning."
             />
           )}
+          {user.depotId && run.data && !run.data.intake.closed && (
+            <IntakeOpen
+              date={date}
+              intake={run.data.intake}
+              demo={Boolean(operating.data?.demoNow)}
+              onMoved={() => setDate(date)}
+            />
+          )}
           {user.depotId && (
             <Routes>
               <Route path="/" element={<Outlet />}>
@@ -380,16 +398,68 @@ const streamLabel: Record<StreamState, string> = {
   offline: 'Offline · showing the last loaded data',
 };
 
+/**
+ * Shown on every page while stores can still change this run's orders. Submitted orders reach
+ * the planning queue only at the cutoff, so without this the dispatcher sees a queue that is
+ * missing the orders a store has just placed and nothing that says why. In DEMO_MODE the same
+ * notice carries the clock control that closes the run.
+ */
+function IntakeOpen({
+  date,
+  intake,
+  demo,
+  onMoved,
+}: {
+  date: string;
+  intake: DispatchRun['intake'];
+  demo: boolean;
+  onMoved: () => void;
+}) {
+  const move = useMoveClock(onMoved);
+  const { awaiting, cutoffAt } = intake;
+  const closes = `${clock(cutoffAt)} on ${shortDay(cutoffAt)}`;
+  return (
+    <div className="dispatch-intake">
+      <Banner
+        tone="warning"
+        title={`Orders for ${shortDay(date)} are open until ${closes}`}
+        action={
+          demo && (
+            <Button
+              size="md"
+              busy={move.isPending}
+              // One minute past the cutoff, the same moment as the demo clock's "After cutoff".
+              onClick={() => move.mutate(`${cutoffAt.slice(0, 11)}16:01:00.000+05:30`)}
+            >
+              Close orders now (demo clock)
+            </Button>
+          )
+        }
+      >
+        {awaiting > 0
+          ? `${awaiting} submitted ${awaiting === 1 ? 'order is' : 'orders are'} still editable by the store and ${awaiting === 1 ? 'joins' : 'join'} the planning queue at the cutoff. The plan can be drafted now and published after it.`
+          : 'Stores can still place and change orders for this run. New orders join the planning queue at the cutoff.'}
+        {move.error && ` ${message(move.error)}`}
+      </Banner>
+    </div>
+  );
+}
+
 // The operating clock's Asia/Colombo date. GET /admin/clock exists only in DEMO_MODE; without
 // it the server follows the host clock, so the device's time gives the same day.
-async function operatingToday(): Promise<{ today: string; demoNow: string | null }> {
+async function operatingToday(): Promise<{
+  today: string;
+  morning: boolean;
+  demoNow: string | null;
+}> {
   try {
     const now = await http('/admin/clock', operatingClockSchema);
-    return { today: now.now.slice(0, 10), demoNow: now.now };
+    return { today: now.now.slice(0, 10), morning: now.now.slice(11, 13) < '12', demoNow: now.now };
   } catch (cause) {
     if (!(cause instanceof HttpError) || cause.status !== 404) throw cause;
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Colombo' }).format(new Date());
-    return { today, demoNow: null };
+    // Asia/Colombo has no daylight-saving shift, so +05:30 is the whole zone rule.
+    const colombo = new Date(Date.now() + 330 * 60_000).toISOString();
+    return { today: colombo.slice(0, 10), morning: colombo.slice(11, 13) < '12', demoNow: null };
   }
 }
 

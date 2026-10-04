@@ -57,6 +57,7 @@ const MISSING_RUN = 'Planning run not found';
 const EMPTY_PLAN =
   'The plan has no trips. Allocate orders, or defer each one with a reason, before publishing.';
 const NOTHING_TO_PUBLISH = 'There are no orders or deferrals to publish for this run';
+const INTAKE_OPEN = 'Orders for this run stay open until the 4:00 PM cutoff.';
 const UNACCOUNTED = 'The plan does not account for every eligible order';
 
 type Dispatcher = Extract<User, { role: 'dispatcher' }>;
@@ -150,7 +151,18 @@ export function createPlanningService(
             : null,
         };
       });
-      return { items, total: items.length, depotId, planVersion: run?.planVersion ?? 0 };
+      const intake = await orders.intakeForRun(dispatcher, serviceDate);
+      return {
+        items,
+        total: items.length,
+        depotId,
+        planVersion: run?.planVersion ?? 0,
+        intake: {
+          cutoffAt: formatColomboTimestamp(intake.cutoffAt),
+          closed: intake.closed,
+          awaiting: intake.awaiting,
+        },
+      };
     },
 
     async autoAllocate(user, serviceDate, version) {
@@ -401,6 +413,15 @@ export function createPlanningService(
     },
 
     async publish(user, serviceDate, version) {
+      // A plan published while stores can still change submitted orders would leave those
+      // orders out of the run for good, so it waits for the cutoff that confirms them.
+      const intake = await orders.intakeForRun(assertDispatcher(user), serviceDate);
+      if (!intake.closed && intake.awaiting > 0) {
+        throw new ApiError(
+          'CONSTRAINT_VIOLATION',
+          `${INTAKE_OPEN} ${intake.awaiting} submitted ${intake.awaiting === 1 ? 'order joins' : 'orders join'} the run at the cutoff.`,
+        );
+      }
       return withOpenRun(
         db,
         repo,

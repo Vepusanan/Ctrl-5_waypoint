@@ -35,7 +35,7 @@ interface DemoOrder {
   version: number;
 }
 
-interface DemoDay {
+export interface DemoDay {
   serviceDate: string;
   previousOperatingDate: string;
   homeDepotId: string;

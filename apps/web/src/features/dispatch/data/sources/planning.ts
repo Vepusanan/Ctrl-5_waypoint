@@ -46,7 +46,7 @@ import type {
 import { draftsOf, inspectDraft, placeOrder, type TripSlot } from '../../engine';
 import { ruleLabels } from '../../rules';
 import type { Source } from '../client';
-import { nextRun, previousDay, serverNow, session } from '../context';
+import { nextRun, serverNow, session } from '../context';
 import {
   deferralHistory,
   forgetPlans,
@@ -95,8 +95,8 @@ async function queue(date: string): Promise<z.infer<typeof planningQueueSchema>>
   const snapshot = await plan(date);
   return {
     date,
-    // Orders close at 16:00 the day before the run (SYSTEM_DESIGN §4).
-    cutoffAt: `${previousDay(date)}T16:00:00+05:30`,
+    // Orders close at 16:00 on the operating day before the run (SYSTEM_DESIGN §4).
+    cutoffAt: snapshot.intake.cutoffAt,
     deltaPercent: null,
     items: snapshot.items.map((item) => toQueueOrder(item, snapshot)),
     total: snapshot.items.length,
@@ -812,6 +812,17 @@ async function review(date: string): Promise<z.infer<typeof planReviewSchema>> {
       note: null,
     },
     checks: [
+      // The server refuses this publish too: these orders would be left out of the run.
+      ...(!snapshot.intake.closed && snapshot.intake.awaiting > 0
+        ? [
+            {
+              key: 'intake',
+              state: 'fail' as const,
+              title: 'Order cutoff',
+              detail: `Orders stay open until ${snapshot.intake.cutoffAt.slice(11, 16)}. ${snapshot.intake.awaiting} submitted ${snapshot.intake.awaiting === 1 ? 'order joins' : 'orders join'} the run at the cutoff.`,
+            },
+          ]
+        : []),
       {
         key: 'hard',
         state: hard || snapshot.inputError ? 'fail' : 'pass',

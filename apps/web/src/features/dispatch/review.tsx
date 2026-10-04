@@ -131,7 +131,7 @@ export function ReviewPublish() {
             </Link>
           }
         >
-          Publish stays off until every hard rule passes.
+          Publish stays off until every blocking check passes.
         </Banner>
       )}
       <div className="rv-row">

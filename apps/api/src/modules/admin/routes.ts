@@ -46,7 +46,7 @@ export function adminRoutes(seed: DemoSeedConfig): FastifyPluginAsyncZod {
         },
       },
       async (request) => {
-        const clock = service.setClock(request.body);
+        const clock = await service.setClock(request.user, request.body);
         // The pinned time may be past the generated calendar.
         await app.ensureCalendar();
         return clock;

@@ -25,7 +25,7 @@ import { shortDay } from '../../lib/format';
 import { type DeferralCandidate, deferralBoardSchema } from './contracts';
 import { api, message, noContent } from './data/client';
 import { ruleIcons } from './rules';
-import { CardHead } from './ui';
+import { CardHead, planState } from './ui';
 import { Page, useDispatch } from './workspace';
 import './deferrals.css';
 
@@ -65,7 +65,7 @@ interface Decision {
 }
 
 export function DeferralCenter() {
-  const { date } = useDispatch();
+  const { date, run } = useDispatch();
   const client = useQueryClient();
   const [params] = useSearchParams();
   const [policy, setPolicy] = useState<string | null>(null);
@@ -181,7 +181,7 @@ export function DeferralCenter() {
   return (
     <Page
       {...header}
-      description={`Plan v${data.planVersion} draft · ${
+      description={`Plan v${data.planVersion} ${planState(run)} · ${
         data.shortage ? 'capacity cannot serve every order tonight' : 'capacity covers every order'
       }`}
       actions={

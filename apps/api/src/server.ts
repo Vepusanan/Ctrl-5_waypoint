@@ -29,7 +29,7 @@ const app = await buildApp({
 });
 app.addHook('onClose', () => connection.close());
 
-// The pin lives in memory, so every start re-derives it from the seeded day.
+// The pin lives in memory, so every start restores it: the last recorded move, else the seed start.
 if (env.DEMO_MODE) {
   const start = await startDemoClock(createAdminRepo(connection.db), app.clock);
   if (start === null) app.log.warn('demo_clock.unseeded');

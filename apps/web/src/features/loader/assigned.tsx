@@ -99,7 +99,7 @@ export function AssignedLoads() {
         <StateCard
           icon={<LoaderIcon name="truck-empty" size={30} />}
           title="No loads currently awaiting action"
-          description={`New loads appear here when the dispatcher publishes a plan for ${user.depotId}.`}
+          description={`No plan for ${user.depotId} is published yet. Loads appear here, without a reload, as soon as the dispatcher publishes one in Review & publish.`}
         >
           <Button variant="secondary" className="loader-cta" busy={refreshing} onClick={refresh}>
             Refresh

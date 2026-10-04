@@ -19,7 +19,7 @@ import type {
   operationsSchema,
 } from '../../contracts';
 import type { Source } from '../client';
-import { nextRun, previousDay, serverNow, session } from '../context';
+import { nextRun, serverNow, session } from '../context';
 import { forgetPlans, placedIds, plan, qualityScore, type Snapshot, unallocated } from './plan';
 
 const summaryOf = (date: string) => http(`/dashboard/summary?date=${date}`, dashboardSummarySchema);
@@ -46,17 +46,19 @@ async function run(date: string): Promise<DispatchRun> {
     summaryOf(date),
     exceptionsOf(date),
   ]);
-  const cutoffDay = previousDay(date);
+  const { cutoffAt } = snapshot.intake;
   return {
     serviceDate: date,
     now: serverNow(),
     depots: [snapshot.depotId],
-    // Orders close at 16:00 the day before (SYSTEM_DESIGN §4). The API has no publish deadline,
-    // so the Figma planning window of two hours stands in.
+    // Orders close at 16:00 on the operating day before (SYSTEM_DESIGN §4). The API has no
+    // publish deadline, so the Figma planning window of two hours stands in.
     planning: {
-      opensAt: `${cutoffDay}T16:00:00+05:30`,
-      publishBy: `${cutoffDay}T18:00:00+05:30`,
+      opensAt: cutoffAt,
+      publishBy: `${cutoffAt.slice(0, 11)}18:00:00+05:30`,
     },
+    intake: snapshot.intake,
+    published: snapshot.published,
     counts: {
       queue: snapshot.items.length,
       hardViolations: snapshot.violations.length,

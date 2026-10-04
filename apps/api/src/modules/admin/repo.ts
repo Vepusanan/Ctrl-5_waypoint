@@ -1,4 +1,5 @@
 import {
+  auditLog,
   calendarDays,
   type Database,
   DEMO_USERS,
@@ -25,6 +26,8 @@ interface SeededDay {
 export interface AdminRepo {
   findUserByEmail(email: string): Promise<DemoActor | null>;
   findSeededDay(): Promise<SeededDay | null>;
+  /** The operating time the dispatcher last moved the demo clock to, since the last seed. */
+  lastClockMove(): Promise<Date | null>;
   restoreSeed(options: {
     password: string;
     demoDate?: string;
@@ -59,6 +62,21 @@ export function createAdminRepo(db: Database): AdminRepo {
       return { serviceDate: seeded.serviceDate, cutoffDate: previous.date };
     },
 
+    async lastClockMove() {
+      // Audit ids are UUIDv7, so the highest id is the most recent move in real time. created_at
+      // holds operating-clock time, which a move back to "before cutoff" would put out of order.
+      const [move] = await db
+        .select({ after: auditLog.after })
+        .from(auditLog)
+        .where(eq(auditLog.action, CLOCK_SET))
+        .orderBy(desc(auditLog.id))
+        .limit(1);
+      const now = move?.after?.now;
+      if (typeof now !== 'string') return null;
+      const moved = new Date(now);
+      return Number.isNaN(moved.getTime()) ? null : moved;
+    },
+
     restoreSeed(options) {
       return seedDatabase(db, {
         reset: true,
@@ -70,4 +88,5 @@ export function createAdminRepo(db: Database): AdminRepo {
   };
 }
 
+export const CLOCK_SET = 'clock.set';
 export const DEMO_DISPATCHER_EMAIL = DEMO_USERS.dispatcher.email;

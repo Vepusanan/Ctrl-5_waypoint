@@ -16,7 +16,7 @@ import { clock } from '../../lib/format';
 import { type HardViolation, type RuleGroup, validationSchema } from './contracts';
 import { api, message, noContent } from './data/client';
 import { ruleExplanations } from './rules';
-import { CardHead, capacityTone, StatBars } from './ui';
+import { CardHead, capacityTone, planState, StatBars } from './ui';
 import { Page, useDispatch } from './workspace';
 import './validation.css';
 
@@ -31,7 +31,7 @@ const groups: Record<RuleGroup, { label: string; icon: string }> = {
 };
 
 export function ValidationPage() {
-  const { date } = useDispatch();
+  const { date, run } = useDispatch();
   const client = useQueryClient();
   const key = ['planning', date, 'validation'];
   const report = useQuery({
@@ -72,7 +72,7 @@ export function ValidationPage() {
   return (
     <Page
       {...header}
-      description={`Plan v${data.planVersion} draft · checked ${clock(data.checkedAt)} · rules are deterministic`}
+      description={`Plan v${data.planVersion} ${planState(run)} · checked ${clock(data.checkedAt)} · rules are deterministic`}
       actions={
         <>
           <Button
