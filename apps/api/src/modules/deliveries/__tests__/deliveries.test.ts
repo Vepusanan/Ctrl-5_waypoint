@@ -312,6 +312,42 @@ describe('deliveries', () => {
     expect(rows[0]?.signature.equals(PNG)).toBe(true);
   });
 
+  it('serves proof-of-delivery images only to roles that may see the stop', async () => {
+    const trip = await insertTrip();
+    const stopId = trip.stopIds[0] ?? missing('stop');
+    const image = (cookie: string, kind: 'signature' | 'photo', id = stopId) =>
+      app.inject({ method: 'GET', url: `/api/v1/stops/${id}/pod/${kind}`, headers: { cookie } });
+    // Nothing is stored yet.
+    expect((await image(driver.cookie, 'signature')).statusCode).toBe(404);
+    json(await postPod(driver.cookie, stopId), 201);
+
+    const own = await image(driver.cookie, 'signature');
+    expect(own.statusCode).toBe(200);
+    expect(own.headers['content-type']).toBe('image/png');
+    expect(own.rawPayload.equals(PNG)).toBe(true);
+    expect((await image(dispatcher.cookie, 'signature')).statusCode).toBe(200);
+    expect((await image(store.cookie, 'signature')).statusCode).toBe(200);
+    // No photo was taken, another driver has no such stop, and a loader has no access at all.
+    expect((await image(dispatcher.cookie, 'photo')).statusCode).toBe(404);
+    expect((await image(otherDriverCookie, 'signature')).statusCode).toBe(404);
+    expect((await image(loaderCookie, 'signature')).statusCode).toBe(403);
+    expect((await image('', 'signature')).statusCode).toBe(401);
+    // The store manager is scoped to their own outlet's stop, not the whole trip.
+    const other = trip.stopIds[1];
+    if (other !== undefined) {
+      const foreign = await database.db
+        .select({ outletId: orders.outletId })
+        .from(tripStops)
+        .innerJoin(orders, eq(orders.id, tripStops.orderId))
+        .where(eq(tripStops.id, other));
+      const own = store.user.role === 'store_manager' ? store.user.outletId : null;
+      if (foreign[0]?.outletId !== own) {
+        json(await postPod(driver.cookie, other), 201);
+        expect((await image(store.cookie, 'signature', other)).statusCode).toBe(404);
+      }
+    }
+  });
+
   it('rejects an oversized or non-image upload', async () => {
     const trip = await insertTrip();
     const stopId = trip.stopIds[0] ?? missing('stop');

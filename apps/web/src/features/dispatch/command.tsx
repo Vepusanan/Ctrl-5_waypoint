@@ -39,7 +39,7 @@ const actions: Record<CommandActionKind, { to: string; icon: string; tone?: Tone
   outlets_unconfirmed: { to: 'outlets', icon: 'Store' },
   loading_shortfall: { to: 'live', icon: 'Xoct1', tone: 'danger' },
   failed_delivery: { to: 'live', icon: 'Xoct1', tone: 'danger' },
-  receipt_discrepancy: { to: 'live', icon: 'Store' },
+  receipt_discrepancy: { to: 'issues', icon: 'Store' },
   sync_conflict: { to: 'live', icon: 'History', tone: 'warning' },
   vehicle_unavailable: { to: 'allocate', icon: 'Xoct1', tone: 'danger' },
   stale_driver: { to: 'live', icon: 'Clock1', tone: 'hold' },

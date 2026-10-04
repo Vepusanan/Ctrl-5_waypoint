@@ -66,6 +66,7 @@ export function toDashboardStreamMessage(event: DomainEvent): DashboardStreamMes
     case 'receipt.confirmed':
       return message(event.type, event.occurredAt, 'receipt', event.receiptId);
     case 'issue.reported':
+    case 'issue.resolved':
       return message(event.type, event.occurredAt, 'issue', event.issueId);
     case 'sync.conflict':
       return message(event.type, event.occurredAt, 'sync_conflict', event.conflictId);

@@ -170,6 +170,11 @@ interface NotificationDraft {
 export interface PlanningRepo {
   findCalendarDay(db: PlanningDb, date: string): Promise<CalendarDay | null>;
   previousOperatingDate(db: PlanningDb, beforeDate: string): Promise<string | null>;
+  listOrdersByIds(
+    db: PlanningDb,
+    orderIds: readonly string[],
+    userScope: SQL,
+  ): Promise<EligibleOrder[]>;
   listEligibleOrders(
     db: PlanningDb,
     depotId: string,
@@ -210,6 +215,7 @@ export interface PlanningRepo {
   listDrafts(db: PlanningDb, runId: string): Promise<DraftTrip[]>;
   replaceTrips(db: PlanningDb, runId: string, trips: readonly StoredTrip[]): Promise<string[]>;
   insertDeferrals(db: PlanningDb, runId: string, rows: readonly DeferralDraft[]): Promise<string[]>;
+  countDeferrals(db: PlanningDb, runId: string): Promise<number>;
   insertFuel(db: PlanningDb, rows: readonly FuelWrite[]): Promise<void>;
   lockOrders(db: PlanningDb, ids: readonly string[]): Promise<Map<string, OrderStatus>>;
   markOrders(db: PlanningDb, rows: readonly OrderStatusWrite[]): Promise<void>;
@@ -271,31 +277,19 @@ export function createPlanningRepo(): PlanningRepo {
       return first(rows)?.date ?? null;
     },
 
+    async listOrdersByIds(db, orderIds, userScope) {
+      if (orderIds.length === 0) return [];
+      return db
+        .select(eligibleOrderColumns)
+        .from(orders)
+        .innerJoin(outlets, eq(orders.outletId, outlets.id))
+        .where(and(inArray(orders.id, [...orderIds]), userScope))
+        .orderBy(asc(outlets.id), asc(orders.id));
+    },
+
     async listEligibleOrders(db, depotId, serviceDate, userScope) {
       return db
-        .select({
-          id: orders.id,
-          outletId: orders.outletId,
-          brand: orders.brand,
-          temp: orders.temp,
-          requestedDate: orders.requestedDate,
-          units: orders.units,
-          weightKg: orders.weightKg,
-          volumeM3: orders.volumeM3,
-          status: orders.status,
-          submittedAt: orders.submittedAt,
-          lockedAt: orders.lockedAt,
-          version: orders.version,
-          district: outlets.district,
-          depotId: outlets.depotId,
-          outletBrand: outlets.brand,
-          dockType: outlets.dockType,
-          parkingConstraint: outlets.parkingConstraint,
-          windowOpen: outlets.windowOpen,
-          windowClose: outlets.windowClose,
-          mallWindowOpen: outlets.mallWindowOpen,
-          mallWindowClose: outlets.mallWindowClose,
-        })
+        .select(eligibleOrderColumns)
         .from(orders)
         .innerJoin(outlets, eq(orders.outletId, outlets.id))
         .where(
@@ -560,6 +554,14 @@ export function createPlanningRepo(): PlanningRepo {
       return ids;
     },
 
+    async countDeferrals(db, runId) {
+      const rows = await db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(deferrals)
+        .where(eq(deferrals.runId, runId));
+      return rows[0]?.total ?? 0;
+    },
+
     async insertDeferrals(db, runId, rows) {
       if (rows.length === 0) return [];
       const inserted = await db
@@ -674,6 +676,30 @@ export function createPlanningRepo(): PlanningRepo {
     },
   };
 }
+
+const eligibleOrderColumns = {
+  id: orders.id,
+  outletId: orders.outletId,
+  brand: orders.brand,
+  temp: orders.temp,
+  requestedDate: orders.requestedDate,
+  units: orders.units,
+  weightKg: orders.weightKg,
+  volumeM3: orders.volumeM3,
+  status: orders.status,
+  submittedAt: orders.submittedAt,
+  lockedAt: orders.lockedAt,
+  version: orders.version,
+  district: outlets.district,
+  depotId: outlets.depotId,
+  outletBrand: outlets.brand,
+  dockType: outlets.dockType,
+  parkingConstraint: outlets.parkingConstraint,
+  windowOpen: outlets.windowOpen,
+  windowClose: outlets.windowClose,
+  mallWindowOpen: outlets.mallWindowOpen,
+  mallWindowClose: outlets.mallWindowClose,
+};
 
 const vehicleColumns = {
   id: vehicles.id,

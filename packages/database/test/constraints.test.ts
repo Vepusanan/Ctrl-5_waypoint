@@ -24,6 +24,9 @@ const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 const ARRIVAL = new Date('2026-10-03T03:30:00.000+05:30');
 
 const TABLES = [
+  'demand_history',
+  'loading_counts',
+  'saved_views',
   'depots',
   'outlets',
   'vehicles',

@@ -11,20 +11,27 @@ describe('demo day', () => {
   });
 
   it('seeds the four roles against Peliyagoda', () => {
-    expect(day.accounts.map((account) => account.role).sort()).toEqual([
+    expect([...new Set(day.accounts.map((account) => account.role))].sort()).toEqual([
       'dispatcher',
       'driver',
       'loader',
       'store_manager',
     ]);
-    expect(day.accounts.map((account) => account.email).sort()).toEqual(
-      [
+    expect(day.accounts.map((account) => account.email)).toEqual(
+      expect.arrayContaining([
         DEMO_USERS.dispatcher.email,
         DEMO_USERS.driver.email,
         DEMO_USERS.loader.email,
         DEMO_USERS.storeManager.email,
-      ].sort(),
+      ]),
     );
+    // One driver per vehicle at the home depot, each bound to a different vehicle.
+    const drivers = day.accounts.filter((account) => account.role === 'driver');
+    const homeVehicles = syntheticReference.vehicles.filter(
+      (vehicle) => vehicle.depotId === day.homeDepotId,
+    );
+    expect(drivers).toHaveLength(homeVehicles.length);
+    expect(new Set(drivers.map((account) => account.vehicleId)).size).toBe(drivers.length);
     const driver = day.accounts.find((account) => account.role === 'driver');
     expect(driver?.vehicleId).toMatch(/^VEH\d{3}$/);
     const store = day.accounts.find((account) => account.role === 'store_manager');

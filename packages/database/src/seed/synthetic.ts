@@ -98,6 +98,25 @@ export const syntheticReference: ReferenceData = {
     { brand: 'Style', temp: 'ambient', units: 6, weightKg: 22, volumeM3: 1.4 },
     { brand: 'Tech', temp: 'ambient', units: 4, weightKg: 16, volumeM3: 0.4 },
   ],
+  // Four earlier Fridays, so analytics has a same-weekday series without the confidential data.
+  demandHistory: ['2026-05-29', '2026-06-05', '2026-06-12', '2026-06-19'].flatMap((date, week) => [
+    {
+      date,
+      depotId: 'Peliyagoda',
+      brand: 'Fresh' as const,
+      orders: 6 + week,
+      volumeM3: 14 + week * 2,
+      chilledVolumeM3: 5 + week,
+    },
+    {
+      date,
+      depotId: 'Peliyagoda',
+      brand: 'Style' as const,
+      orders: 2,
+      volumeM3: 3,
+      chilledVolumeM3: 0,
+    },
+  ]),
 };
 
 function outlet(

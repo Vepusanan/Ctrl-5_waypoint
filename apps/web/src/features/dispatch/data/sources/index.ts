@@ -1,7 +1,9 @@
 import type { Source } from '../client';
 import { dashboardSources } from './dashboard';
+import { insightSources } from './insights';
 import { orderSources } from './orders';
 import { planningSources } from './planning';
+import { replanSources } from './replan';
 
 /**
  * Requests answered from the real API, mapped into the page contracts in ../../contracts.ts.
@@ -12,4 +14,6 @@ export const sources: readonly Source[] = [
   ...dashboardSources,
   ...planningSources,
   ...orderSources,
+  ...replanSources,
+  ...insightSources,
 ];

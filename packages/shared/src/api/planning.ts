@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { orderSchema } from '../entities/order.ts';
 import { deferralSchema } from '../entities/planning.ts';
 import { timeWindowSchema } from '../entities/reference.ts';
-import { deferralTypeSchema, parkingConstraintSchema, reasonCodeSchema } from '../enums.ts';
+import {
+  deferralTypeSchema,
+  parkingConstraintSchema,
+  reasonCodeSchema,
+  temperatureRequirementSchema,
+  tripStatusSchema,
+} from '../enums.ts';
 import {
   orderLiteSchema,
   planMetricsSchema,
@@ -128,3 +134,80 @@ export type ListDeferralsQuery = z.infer<typeof listDeferralsQuerySchema>;
 
 export const deferralListResponseSchema = listResponseSchema(deferralSchema);
 export type DeferralListResponse = z.infer<typeof deferralListResponseSchema>;
+
+// Replanning a published run (SRS §24, §42 "Vehicle unavailable"). Stops that have left the depot
+// are never touched: only orders still at the depot can move or be deferred.
+
+export const markVehicleUnavailableRequestSchema = z.object({
+  date: isoDateSchema,
+  reason: z.string().trim().min(1).max(200).optional(),
+});
+export type MarkVehicleUnavailableRequest = z.infer<typeof markVehicleUnavailableRequestSchema>;
+
+export const vehicleUnavailableResponseSchema = z.object({
+  vehicleId: vehicleIdSchema,
+  date: isoDateSchema,
+  /** Published trips of the vehicle that had not departed. Their orders wait for a replan. */
+  blockedTripIds: z.array(uuidSchema),
+  affectedOrderIds: z.array(uuidSchema),
+});
+export type VehicleUnavailableResponse = z.infer<typeof vehicleUnavailableResponseSchema>;
+
+const replanTargetSchema = z.object({ vehicleId: vehicleIdSchema, tripNo: tripNoSchema });
+
+export const replanMoveSchema = z.object({
+  orderId: uuidSchema,
+  /** The trip that takes the order. Null defers it to the next run. */
+  target: replanTargetSchema.nullable(),
+  /** Why the order is deferred. Required when `target` is null. */
+  reasonCode: reasonCodeSchema.optional(),
+});
+export type ReplanMove = z.infer<typeof replanMoveSchema>;
+
+export const replanRequestSchema = z.object({
+  moves: z
+    .array(replanMoveSchema)
+    .min(1)
+    .max(200)
+    .refine((moves) => new Set(moves.map((move) => move.orderId)).size === moves.length, {
+      message: 'An order can only be moved once',
+    }),
+  /** The dispatcher's reason for changing a published plan. Kept in the audit log. */
+  note: z.string().trim().min(1, 'Say why the published plan is changing').max(500),
+});
+export type ReplanRequest = z.infer<typeof replanRequestSchema>;
+
+export const replanResponseSchema = z.object({
+  planVersion: versionSchema,
+  movedOrderIds: z.array(uuidSchema),
+  deferredOrderIds: z.array(uuidSchema),
+  changedTripIds: z.array(uuidSchema),
+});
+export type ReplanResponse = z.infer<typeof replanResponseSchema>;
+
+export const replanProposalSchema = z.object({
+  serviceDate: isoDateSchema,
+  vehicleId: vehicleIdSchema,
+  planVersion: versionSchema,
+  /** When the vehicle was marked unavailable, and the reason given. Null if it never was. */
+  markedAt: timestampSchema.nullable(),
+  reason: z.string().min(1).nullable(),
+  /** Every order has a trip that passes the hard rules. */
+  feasible: z.boolean(),
+  orders: z.array(
+    z.object({
+      orderId: uuidSchema,
+      outletId: outletIdSchema,
+      temp: temperatureRequirementSchema,
+      weightKg: z.number().positive(),
+      from: replanTargetSchema.extend({ tripStatus: tripStatusSchema }),
+      /** Where the validator lets the order go. Null when no trip can take it. */
+      target: replanTargetSchema
+        .extend({ newTrip: z.boolean(), loadPercent: z.number().nonnegative() })
+        .nullable(),
+      /** The rule that stopped the last candidate, when there is no target. */
+      blockedBy: reasonCodeSchema.nullable(),
+    }),
+  ),
+});
+export type ReplanProposal = z.infer<typeof replanProposalSchema>;

@@ -3,6 +3,7 @@ import {
   auditLog,
   depots,
   districtTravel,
+  loadingCounts,
   loadingIssues,
   loadingRecords,
   notifications,
@@ -264,6 +265,44 @@ describe('loading', () => {
     const state = loadingStateSchema.parse(json(view, 200));
     expect(state.status).toBe('in_progress');
     expect(state.issues).toHaveLength(1);
+  });
+
+  it('keeps the loader count on the server and validates it', async () => {
+    const trip = await insertTrip();
+    const orderId = trip.orderIds[0] ?? missing('order');
+    const count = (cookie: string, payload: Record<string, unknown>) =>
+      app.inject({
+        method: 'PUT',
+        url: `/api/v1/trips/${trip.tripId}/loading/counts`,
+        headers: { cookie },
+        payload,
+      });
+    // Counting starts with loading.
+    expect((await count(loader.cookie, { orderId, units: 1 })).statusCode).toBe(422);
+    await start(trip.tripId);
+
+    const saved = loadingStateSchema.parse(
+      json(await count(loader.cookie, { orderId, units: 2 }), 200),
+    );
+    expect(saved.stops.find((stop) => stop.order.id === orderId)?.loadedUnits).toBe(2);
+    const units = saved.stops.find((stop) => stop.order.id === orderId)?.order.units ?? 0;
+    expect((await count(loader.cookie, { orderId, units: units + 1 })).statusCode).toBe(422);
+    expect((await count(loader.cookie, { orderId, units: -1 })).statusCode).toBe(400);
+    expect((await count(dispatcher.cookie, { orderId, units: 1 })).statusCode).toBe(403);
+    expect(
+      (await count(loader.cookie, { orderId: '00000000-0000-7000-8000-000000000000', units: 1 }))
+        .statusCode,
+    ).toBe(422);
+
+    // A fresh read, as after a reload or on another tablet, still has the count.
+    const view = await app.inject({
+      method: 'GET',
+      url: `/api/v1/trips/${trip.tripId}/loading`,
+      headers: { cookie: loader.cookie },
+    });
+    const state = loadingStateSchema.parse(json(view, 200));
+    expect(state.stops.find((stop) => stop.order.id === orderId)?.loadedUnits).toBe(2);
+    expect(await database.db.select().from(loadingCounts)).toHaveLength(1);
   });
 
   it('blocks Ready while a loading issue is unacknowledged', async () => {

@@ -11,6 +11,9 @@ const envSchema = z.object({
   DOMAIN: z.string().optional(),
   DEMO_MODE: z.stringbool().default(false),
   DEMO_DATE: z.iso.date().optional(),
+  // Sign-in attempts allowed per address per minute. A shared demo, where one reviewer
+  // switches between several accounts, may need more than the default of 10.
+  LOGIN_RATE_LIMIT: z.coerce.number().int().min(1).max(10_000).optional(),
 });
 
 export function loadEnv(source: NodeJS.ProcessEnv): z.infer<typeof envSchema> {

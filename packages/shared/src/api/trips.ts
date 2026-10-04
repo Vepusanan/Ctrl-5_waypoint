@@ -81,6 +81,12 @@ export const resequenceTripRequestSchema = z.object({
 });
 export type ResequenceTripRequest = z.infer<typeof resequenceTripRequestSchema>;
 
+export const setLoadingCountRequestSchema = z.object({
+  orderId: uuidSchema,
+  units: z.int().nonnegative(),
+});
+export type SetLoadingCountRequest = z.infer<typeof setLoadingCountRequestSchema>;
+
 export const createLoadingIssueRequestSchema = loadingIssueSchema
   .pick({ orderId: true, type: true, qty: true })
   .extend({ note: z.string().trim().min(1).optional() });

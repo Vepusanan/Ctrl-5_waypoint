@@ -1,5 +1,14 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  pgTable,
+  primaryKey,
+  text,
+  unique,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { eventTimestamp, operationalId } from './columns.ts';
 import { loadingIssueTypeEnum, loadingStatusEnum } from './enums.ts';
 import { users } from './identity.ts';
@@ -61,5 +70,29 @@ export const loadingIssues = pgTable(
         or (${table.acknowledgedBy} is not null and ${table.acknowledgedAt} is not null)
       )`,
     ),
+  ],
+);
+
+// Cartons the loader has counted onto the vehicle for one order of a trip. Kept on the server so
+// a refresh, a sign-in or another tablet shows the same count.
+export const loadingCounts = pgTable(
+  'loading_counts',
+  {
+    tripId: uuid('trip_id')
+      .notNull()
+      .references(() => trips.id, { onDelete: 'cascade' }),
+    orderId: uuid('order_id')
+      .notNull()
+      .references(() => orders.id),
+    units: integer('units').notNull(),
+    updatedBy: uuid('updated_by')
+      .notNull()
+      .references(() => users.id),
+    updatedAt: eventTimestamp('updated_at').notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tripId, table.orderId] }),
+    index('loading_counts_order_id').on(table.orderId),
+    check('loading_counts_units', sql`${table.units} >= 0`),
   ],
 );

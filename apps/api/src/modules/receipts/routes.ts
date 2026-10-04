@@ -5,6 +5,7 @@ import {
   issueListResponseSchema,
   issueSchema,
   receiptSchema,
+  resolveIssueRequestSchema,
 } from '@waypoint/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { createReceiptService } from './service.ts';
@@ -95,5 +96,26 @@ export const receiptRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => service.getIssue(request.user, request.params.id),
+  );
+
+  app.post(
+    '/issues/:id/resolve',
+    {
+      preHandler: app.requireRole('dispatcher'),
+      schema: {
+        tags: ['receipts'],
+        params: idParamsSchema,
+        body: resolveIssueRequestSchema,
+        response: {
+          200: issueSchema,
+          400: apiErrorSchema,
+          401: apiErrorSchema,
+          403: apiErrorSchema,
+          404: apiErrorSchema,
+          422: apiErrorSchema,
+        },
+      },
+    },
+    async (request) => service.resolveIssue(request.user, request.params.id, request.body),
   );
 };

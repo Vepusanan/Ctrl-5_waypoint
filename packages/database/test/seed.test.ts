@@ -167,7 +167,7 @@ describe('database seed', () => {
     expect(first.applied).toBe(true);
     expect(first.serviceDate).toBe(DEMO_SERVICE_DATE);
     expect(first.source).toBe('synthetic');
-    expect(first.accounts).toHaveLength(4);
+    expect(first.accounts.length).toBeGreaterThanOrEqual(4);
 
     const before = await db.select().from(orders);
     const second = await seedDatabase(db, {

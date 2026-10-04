@@ -11,6 +11,8 @@ declare module 'fastify' {
     db: Database;
     audit: AuditRecorder;
     clock: OperatingClock;
+    /** Generates operating days ahead of the operating clock. */
+    ensureCalendar: () => Promise<void>;
     domainEvents: DomainEventBus;
     authService: AuthService;
     secureCookies: boolean;

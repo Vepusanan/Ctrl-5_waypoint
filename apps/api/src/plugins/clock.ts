@@ -1,4 +1,10 @@
-import { calendarDays, seedMeta } from '@waypoint/database';
+import {
+  addCalendarDays,
+  CALENDAR_HORIZON_DAYS,
+  calendarDays,
+  ensureCalendarThrough,
+  seedMeta,
+} from '@waypoint/database';
 import { and, desc, eq, lt } from 'drizzle-orm';
 import fp from 'fastify-plugin';
 
@@ -10,6 +16,8 @@ export interface OperatingClock {
   pin(now: Date): void;
   unpin(): void;
 }
+
+const COLOMBO_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
 
 function createOperatingClock(): OperatingClock {
   let pinned: Date | null = null;
@@ -30,6 +38,14 @@ export const clockPlugin = fp(
   async (app, options: { demoMode?: boolean }) => {
     const clock = createOperatingClock();
     app.decorate('clock', clock);
+    // Operating days are generated ahead of the operating clock, so ordering and planning never
+    // reach the end of the calendar (the supplied calendar.csv stops on a fixed date). The server
+    // calls this on start, on a timer and whenever the demo clock moves.
+    const ensureCalendar = async () => {
+      const today = new Date(clock.now().getTime() + COLOMBO_OFFSET_MS).toISOString().slice(0, 10);
+      await ensureCalendarThrough(app.db, addCalendarDays(today, CALENDAR_HORIZON_DAYS));
+    };
+    app.decorate('ensureCalendar', ensureCalendar);
     if (!options.demoMode) return;
     const [seed] = await app.db
       .select({ serviceDate: seedMeta.serviceDate })

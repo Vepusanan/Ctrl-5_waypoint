@@ -5,6 +5,7 @@ import {
   ifMatchHeadersSchema,
   loadingIssueSchema,
   loadingStateSchema,
+  setLoadingCountRequestSchema,
 } from '@waypoint/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { createLoadingService } from './service.ts';
@@ -82,6 +83,27 @@ export const loadingRoutes: FastifyPluginAsyncZod = async (app) => {
       },
     },
     async (request) => service.verify(request.user, request.params.id, request.headers['if-match']),
+  );
+
+  app.put(
+    '/trips/:id/loading/counts',
+    {
+      preHandler: app.requireRole('loader'),
+      schema: {
+        tags: ['loading'],
+        params: idParamsSchema,
+        body: setLoadingCountRequestSchema,
+        response: {
+          200: loadingStateSchema,
+          400: apiErrorSchema,
+          401: apiErrorSchema,
+          403: apiErrorSchema,
+          404: apiErrorSchema,
+          422: apiErrorSchema,
+        },
+      },
+    },
+    async (request) => service.setCount(request.user, request.params.id, request.body),
   );
 
   app.post(

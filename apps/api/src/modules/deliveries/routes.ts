@@ -45,6 +45,27 @@ export const deliveryRoutes: FastifyPluginAsyncZod = async (app) => {
     async (request) => service.get(request.user, request.params.id),
   );
 
+  for (const kind of ['signature', 'photo'] as const) {
+    app.get(
+      `/stops/:id/pod/${kind}`,
+      {
+        preHandler: app.requireRole('dispatcher', 'driver', 'store_manager'),
+        schema: {
+          tags: ['deliveries'],
+          params: idParamsSchema,
+          // The body is the image itself, so there is no JSON response schema.
+        },
+      },
+      async (request, reply) => {
+        const image = await service.podImage(request.user, request.params.id, kind);
+        return reply
+          .header('content-type', image.contentType)
+          .header('cache-control', 'private, max-age=3600')
+          .send(image.bytes);
+      },
+    );
+  }
+
   app.post(
     '/stops/:id/events',
     {

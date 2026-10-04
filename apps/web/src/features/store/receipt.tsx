@@ -26,6 +26,33 @@ import {
 import { useStore } from './workspace';
 
 /** S06-W and S06: the driver's proof of delivery, counted by the store and confirmed. */
+/** A proof-of-delivery image from the driver, or a plain note when there is none to show. */
+function PodImage({
+  src,
+  alt,
+  missing,
+  icon,
+}: {
+  src: string | null;
+  alt: string;
+  missing: string;
+  icon: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="st-pod-tile">
+      {src && !failed ? (
+        <img src={src} alt={alt} onError={() => setFailed(true)} />
+      ) : (
+        <>
+          <StoreIcon name={icon} size={22} />
+          <small>{failed ? 'Could not load the image' : missing}</small>
+        </>
+      )}
+    </span>
+  );
+}
+
 export function Receipt({ detail, onChanged }: OrderScreenProps) {
   const { writable } = useStore();
   const phone = usePhone();
@@ -275,15 +302,18 @@ export function Receipt({ detail, onChanged }: OrderScreenProps) {
             <Well icon="pen" tone="inverse" size={36} />
           </div>
           <div className="st-pod-tiles">
-            <span>
-              {delivery?.pod && (
-                <img src="/waypoint/store/2179-26669-imgVector.svg" alt="Signature on file" />
-              )}
-            </span>
-            <span>
-              <StoreIcon name="camera" size={22} />
-              <small>{delivery?.pod?.hasPhoto ? 'Photo on file' : 'No photo'}</small>
-            </span>
+            <PodImage
+              src={delivery?.pod ? insights.podImage(delivery.stopId, 'signature') : null}
+              alt={delivery?.pod ? `Signature of ${delivery.pod.recipientName}` : ''}
+              missing="No signature yet"
+              icon="pen"
+            />
+            <PodImage
+              src={delivery?.pod?.hasPhoto ? insights.podImage(delivery.stopId, 'photo') : null}
+              alt="Delivery photo taken by the driver"
+              missing="No photo"
+              icon="camera"
+            />
           </div>
           <small>
             {delivery?.pod

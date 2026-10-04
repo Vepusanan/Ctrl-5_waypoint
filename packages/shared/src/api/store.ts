@@ -23,6 +23,12 @@ export const createIssueRequestSchema = issueSchema
   .extend({ note: z.string().trim().min(1).optional() });
 export type CreateIssueRequest = z.infer<typeof createIssueRequestSchema>;
 
+// What the dispatcher did about the issue. The store manager reads it on the issue.
+export const resolveIssueRequestSchema = z.object({
+  resolution: z.string().trim().min(1, 'Say how the issue was resolved').max(500),
+});
+export type ResolveIssueRequest = z.infer<typeof resolveIssueRequestSchema>;
+
 export const issueListResponseSchema = listResponseSchema(issueSchema);
 export type IssueListResponse = z.infer<typeof issueListResponseSchema>;
 

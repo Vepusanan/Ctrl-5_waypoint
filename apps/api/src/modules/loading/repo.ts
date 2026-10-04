@@ -7,6 +7,7 @@ import {
   eq,
   inArray,
   isNull,
+  loadingCounts,
   loadingIssues,
   loadingRecords,
   notifications,
@@ -72,6 +73,7 @@ interface LoadingStopRow {
   volumeM3: number;
   orderStatus: OrderStatus;
   parkingConstraint: ParkingConstraint;
+  loadedUnits: number;
 }
 
 export interface LoadingIssueRow {
@@ -147,6 +149,10 @@ export interface LoadingRepo {
   ): Promise<{ id: string; status: OrderStatus; units: number }[]>;
   markOrderLoading(db: LoadingDb, orderId: string): Promise<boolean>;
   orderOnTrip(db: LoadingDb, tripId: string, orderId: string): Promise<{ units: number } | null>;
+  saveCount(
+    db: LoadingDb,
+    count: { tripId: string; orderId: string; units: number; loaderId: string; at: Date },
+  ): Promise<void>;
   insertIssue(
     db: LoadingDb,
     issue: {
@@ -329,6 +335,22 @@ export function createLoadingRepo(): LoadingRepo {
       return rows[0] ?? null;
     },
 
+    async saveCount(db, count) {
+      await db
+        .insert(loadingCounts)
+        .values({
+          tripId: count.tripId,
+          orderId: count.orderId,
+          units: count.units,
+          updatedBy: count.loaderId,
+          updatedAt: count.at,
+        })
+        .onConflictDoUpdate({
+          target: [loadingCounts.tripId, loadingCounts.orderId],
+          set: { units: count.units, updatedBy: count.loaderId, updatedAt: count.at },
+        });
+    },
+
     async insertIssue(db, issue) {
       const rows = await db
         .insert(loadingIssues)
@@ -438,10 +460,15 @@ async function listStops(db: LoadingDb, tripId: string): Promise<LoadingStopRow[
       volumeM3: orders.volumeM3,
       orderStatus: orders.status,
       parkingConstraint: outlets.parkingConstraint,
+      loadedUnits: sql<number>`coalesce(${loadingCounts.units}, 0)`,
     })
     .from(tripStops)
     .innerJoin(orders, eq(orders.id, tripStops.orderId))
     .innerJoin(outlets, eq(outlets.id, orders.outletId))
+    .leftJoin(
+      loadingCounts,
+      and(eq(loadingCounts.tripId, tripStops.tripId), eq(loadingCounts.orderId, tripStops.orderId)),
+    )
     .where(eq(tripStops.tripId, tripId))
     .orderBy(asc(tripStops.seq));
 }

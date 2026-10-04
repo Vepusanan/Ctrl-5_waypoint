@@ -210,7 +210,7 @@ event stream, the notification feed and the demo clock.
 | D01 Command center | `2037:496` | `/dispatcher` | Real API |
 | D01 operations view | `2128:17913` (prototype P34) | `/dispatcher?view=operations` | Real API |
 | D02 Planning queue | `2038:1628` | `/dispatcher/queue` | Real API |
-| D02a Saved views | `2106:9829` | drawer on the queue | Fixture |
+| D02a Saved views | `2106:9829` | drawer on the queue | Real API |
 | D03 Allocation + advisor | `2039:1075` | `/dispatcher/allocate` | Real API |
 | D03a Automatic allocation result | `2106:11687` | state of allocation | Real API |
 | D04 Fleet & trips | `2040:1447` | `/dispatcher/fleet`, `/dispatcher/vehicles/:vehicleId` | Real API |
@@ -225,10 +225,11 @@ event stream, the notification feed and the demo clock.
 | D09a Shortfall + recovery | `2042:3002` | `/dispatcher/live/exceptions/:id` | Real API |
 | D09b Recovery applied | `2042:3534` | same page, after acknowledging | Real API |
 | D09c Minor exception · acknowledge | `2106:12012` | same page | Fixture scenario only |
-| D10 Analytics & forecast | `2043:3400` | `/dispatcher/analytics` | Fixture |
+| D10 Analytics & forecast | `2043:3400` | `/dispatcher/analytics` | Real API |
 | D11 Orders & audit | `2043:4020` | `/dispatcher/orders` | Real API |
-| D12 Vehicle unavailable · replan | `2044:3828` | `/dispatcher/vehicles/:vehicleId/replan` | Fixture |
-| D13 Outlets | `2106:7017` | `/dispatcher/outlets` | Fixture |
+| D12 Vehicle unavailable · replan | `2044:3828` | `/dispatcher/vehicles/:vehicleId/replan` | Real API |
+| D13 Outlets | `2106:7017` | `/dispatcher/outlets` | Real API |
+| Store issues | not in Figma | `/dispatcher/issues` | Real API |
 | D01-T Command center · tablet | `2045:4016` | `/dispatcher` at 801–1279px | as D01 |
 | D01-M Command center · phone | `2045:4446` | `/dispatcher` at ≤800px | as D01 |
 | D09-M Live operations · phone | `2045:4609` | `/dispatcher/live` at ≤800px | as D09 |
@@ -268,7 +269,7 @@ client, or served by a fixture:
 | D01 | On-time prediction | Share of stops that are not tight on their window |
 | D01 operations | Deliveries per hour | Empty chart |
 | D02 | `high_value` and `fragile` tags; four runs of deferral history | Tags left out; only the last run is known |
-| D02a | Saved views (`/planning/views`) | Fixture, kept in memory |
+| D02a | Nothing | Saved on the server (`/planning/views`), per dispatcher, with shared team views |
 | D03 | Driver on a vehicle | Not shown |
 | D03 | Fit score from an advisor | Load after placing; every candidate has passed the validator |
 | D03a | List of single changes with undo | Empty list. "Undo run" takes the placed orders off again, one saved move each. |
@@ -280,13 +281,13 @@ client, or served by a fixture:
 | D08a | Publish time and publisher on the trip list; acknowledgement counts | Time kept from this browser's own publish; progress from trip, loading and stop status |
 | D09 | First event time; predicted finish; late risk; anomaly card | Bar from planned start to the last event; the rest not shown |
 | D09a–b | Recovery options that replan around a shortfall | One option: acknowledge and send short (the real action). It cannot be undone. |
-| D10 | `GET /analytics/forecast` | Fixture |
+| D10 | Trips per week | `sources/insights.ts` turns `GET /analytics/demand` (observed volume, a same-weekday projection, fleet size) into trips at 80% load |
 | D11 | Actor names, signature and photo images, received counts | `sources/orders.ts` reads `GET /orders` and `GET /audit`; actors show by role, images are left out |
-| D12 | `GET, POST /planning/runs/:date/replans/:vehicleId` | Fixture (VEH052 only) |
-| D13 | `GET /outlets/directory`, `GET /outlets/:code/profile` | Fixture |
+| D12 | Late-risk change, per-role acknowledgement counts | `sources/replan.ts` reads the server's proposal and publishes it with `POST /planning/runs/:date/replan`; those two figures stay at zero |
+| D13 | Outlet phone, high-value flag | `sources/insights.ts` joins `GET /outlets` with `GET /outlets/history` and `GET /outlets/:id/profile` |
 
-Fixture pages (D10, D12, D13, D02a) show the Figma scenario, so their orders, outlets and vehicles are
-not the ones in the database.
+Every Dispatcher page now reads the database. The fixtures remain only for
+`VITE_DISPATCH_FIXTURES=all`, which shows the Figma scenario.
 
 ## 9. Open questions
 

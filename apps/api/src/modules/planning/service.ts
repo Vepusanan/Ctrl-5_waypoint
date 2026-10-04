@@ -54,6 +54,9 @@ const PUBLISHED = 'Planning run is already published';
 const MISSING_ORDER = 'Order not found';
 const MISSING_VEHICLE = 'Vehicle not found';
 const MISSING_RUN = 'Planning run not found';
+const EMPTY_PLAN =
+  'The plan has no trips. Allocate orders, or defer each one with a reason, before publishing.';
+const NOTHING_TO_PUBLISH = 'There are no orders or deferrals to publish for this run';
 const UNACCOUNTED = 'The plan does not account for every eligible order';
 
 type Dispatcher = Extract<User, { role: 'dispatcher' }>;
@@ -417,6 +420,19 @@ export function createPlanningService(
           if (violations.length > 0) throw constraint(violations);
           const result = planFromEngine(() => describeAssignment(context.plan, drafts));
           assertAccounted(context.orders, result);
+          // An empty plan would defer the whole run. That is only a decision when the
+          // dispatcher has deferred each order with a reason (SRS FR-DEF-002), never a default.
+          if (drafts.length === 0) {
+            if (result.deferred.length > 0) {
+              throw new ApiError(
+                'CONSTRAINT_VIOLATION',
+                `${EMPTY_PLAN} ${result.deferred.length} of ${context.orders.length} orders have no trip and no recorded deferral.`,
+              );
+            }
+            if ((await repo.countDeferrals(tx, run.id)) === 0) {
+              throw new ApiError('CONSTRAINT_VIOLATION', NOTHING_TO_PUBLISH);
+            }
+          }
           const locked = await repo.lockOrders(
             tx,
             context.orders.map((order) => order.id),
@@ -833,7 +849,7 @@ function draftSnapshot(drafts: readonly TripDraft[]): Record<string, unknown> {
   };
 }
 
-function constraint(violations: readonly Violation[]): ApiError {
+export function constraint(violations: readonly Violation[]): ApiError {
   const first = violations[0];
   const message =
     first === undefined
@@ -844,7 +860,7 @@ function constraint(violations: readonly Violation[]): ApiError {
   return new ApiError('CONSTRAINT_VIOLATION', message, violations);
 }
 
-function planFromEngine(run: () => PlanResult): PlanResult {
+export function planFromEngine(run: () => PlanResult): PlanResult {
   try {
     return run();
   } catch (error) {
@@ -936,7 +952,7 @@ function spareVehicleId(used: ReadonlySet<string>): string {
   throw new ApiError('VALIDATION_ERROR', 'No spare vehicle id for an extra reefer');
 }
 
-function arrivalDate(value: string): Date {
+export function arrivalDate(value: string): Date {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
     throw new ApiError('INTERNAL_ERROR', 'Planned arrival is invalid');

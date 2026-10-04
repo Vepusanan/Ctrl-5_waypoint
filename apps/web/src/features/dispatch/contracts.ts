@@ -301,6 +301,8 @@ const capacityRowSchema = z.object({
 
 const inspectorTripSchema = z.object({
   tripNo: tripNoSchema,
+  /** Where the trip is once the plan is published. Absent on a draft. */
+  status: z.string().min(1).optional(),
   loadKg: z.number().nonnegative(),
   loadM3: z.number().nonnegative(),
   stops: z.array(
@@ -344,6 +346,10 @@ export const vehicleInspectorSchema = z.object({
   }),
   fuel: z.object({ percent, afterPercent: percent, note: z.string().min(1) }),
   trips: z.array(inspectorTripSchema),
+  /** The run is published, so changes go through a replan (SRS §24). */
+  published: z.boolean().optional(),
+  /** The vehicle is marked unavailable on this date. */
+  unavailable: z.boolean().optional(),
 });
 
 /** `GET /planning/runs/:date/vehicles` — the picker on Fleet & trips. */
@@ -1074,3 +1080,35 @@ export const correctionResponseSchema = z.object({
   sentTo: z.string().min(1),
   at: timestampSchema,
 });
+
+// Store issues · the dispatcher reads and resolves what store managers report (SRS §28).
+
+/** `GET /issues/board` — every store issue in the dispatcher's depot, newest first. */
+export const issueBoardSchema = z.object({
+  items: z.array(
+    z.object({
+      id: uuidSchema,
+      orderId: uuidSchema,
+      reference: z.string().min(1),
+      outlet: z.object({ code: z.string().min(1), name: z.string().min(1) }),
+      type: z.enum(['missing', 'damaged', 'incorrect']),
+      note: z.string().min(1).nullable(),
+      status: z.enum(['open', 'resolved']),
+      reportedAt: timestampSchema,
+      resolvedAt: timestampSchema.nullable(),
+      resolution: z.string().min(1).nullable(),
+      /** The delivery the issue is about, with what the driver captured there. */
+      delivery: z
+        .object({
+          vehicleId: vehicleIdSchema,
+          tripNo: tripNoSchema,
+          recipient: z.string().min(1).nullable(),
+          signatureUrl: z.string().min(1).nullable(),
+          photoUrl: z.string().min(1).nullable(),
+        })
+        .nullable(),
+    }),
+  ),
+  total: count,
+});
+export type StoreIssueRow = z.infer<typeof issueBoardSchema>['items'][number];

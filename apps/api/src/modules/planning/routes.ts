@@ -5,20 +5,31 @@ import {
   createDeferralRequestSchema,
   deferralSchema,
   ifMatchHeadersSchema,
+  markVehicleUnavailableRequestSchema,
   moveAllocationRequestSchema,
   planningQueueResponseSchema,
   planningRunParamsSchema,
   publishPlanResponseSchema,
+  replanProposalSchema,
+  replanRequestSchema,
+  replanResponseSchema,
   simulatePlanRequestSchema,
   simulatePlanResponseSchema,
   validatePlanRequestSchema,
   validatePlanResponseSchema,
+  vehicleIdSchema,
+  vehicleUnavailableResponseSchema,
 } from '@waypoint/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
+import { z } from 'zod';
+import { createReplanService } from './replan.ts';
 import { createPlanningService } from './service.ts';
+
+const vehicleParamsSchema = z.object({ id: vehicleIdSchema });
 
 export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
   const service = createPlanningService(app.db, app.audit, app.domainEvents, app.clock);
+  const replans = createReplanService(app.db, app.audit, app.domainEvents, app.clock);
 
   app.get(
     '/planning/runs/:date/queue',
@@ -170,5 +181,71 @@ export const planningRoutes: FastifyPluginAsyncZod = async (app) => {
     },
     async (request) =>
       service.publish(request.user, request.params.date, request.headers['if-match']),
+  );
+
+  // Replanning a published run (SRS §24, §42).
+  app.post(
+    '/vehicles/:id/unavailable',
+    {
+      preHandler: app.requireRole('dispatcher'),
+      schema: {
+        tags: ['planning'],
+        params: vehicleParamsSchema,
+        body: markVehicleUnavailableRequestSchema,
+        response: {
+          200: vehicleUnavailableResponseSchema,
+          400: apiErrorSchema,
+          401: apiErrorSchema,
+          403: apiErrorSchema,
+          404: apiErrorSchema,
+        },
+      },
+    },
+    async (request) => replans.markUnavailable(request.user, request.params.id, request.body),
+  );
+
+  app.get(
+    '/planning/runs/:date/replans/:vehicleId',
+    {
+      preHandler: app.requireRole('dispatcher'),
+      schema: {
+        tags: ['planning'],
+        params: planningRunParamsSchema.extend({ vehicleId: vehicleIdSchema }),
+        response: {
+          200: replanProposalSchema,
+          400: apiErrorSchema,
+          401: apiErrorSchema,
+          403: apiErrorSchema,
+          404: apiErrorSchema,
+          422: apiErrorSchema,
+        },
+      },
+    },
+    async (request) =>
+      replans.proposal(request.user, request.params.date, request.params.vehicleId),
+  );
+
+  app.post(
+    '/planning/runs/:date/replan',
+    {
+      preHandler: app.requireRole('dispatcher'),
+      schema: {
+        tags: ['planning'],
+        params: planningRunParamsSchema,
+        headers: ifMatchHeadersSchema,
+        body: replanRequestSchema,
+        response: {
+          200: replanResponseSchema,
+          400: apiErrorSchema,
+          401: apiErrorSchema,
+          403: apiErrorSchema,
+          404: apiErrorSchema,
+          409: apiErrorSchema,
+          422: apiErrorSchema,
+        },
+      },
+    },
+    async (request) =>
+      replans.apply(request.user, request.params.date, request.headers['if-match'], request.body),
   );
 };

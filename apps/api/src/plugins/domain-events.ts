@@ -69,7 +69,7 @@ interface ReceiptConfirmedEvent {
 }
 
 interface IssueReportedEvent {
-  type: 'issue.reported';
+  type: 'issue.reported' | 'issue.resolved';
   actorId: string;
   occurredAt: string;
   issueId: string;

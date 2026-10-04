@@ -3,6 +3,7 @@ export * from './api/auth.ts';
 export * from './api/common.ts';
 export * from './api/dashboard.ts';
 export * from './api/deliveries.ts';
+export * from './api/insights.ts';
 export * from './api/loading.ts';
 export * from './api/orders.ts';
 export * from './api/planning.ts';

@@ -64,10 +64,40 @@ async function load(date: string, depotId: string): Promise<Snapshot> {
     http(`/trips?date=${date}`, tripListResponseSchema),
   ]);
   const slots = slotsFromTrips(trips.items, vehicles.items);
+  // Once a plan is published its orders leave the open queue. They are still the plan, so the
+  // pages read them back from the trips: names, loads and counts stay whole after publishing.
+  const queued = new Set(queue.items.map((item) => item.id));
+  const outletById = new Map(outlets.items.map((outlet) => [outlet.id, outlet]));
+  const planned: PlanningQueueItem[] = trips.items.flatMap((trip) =>
+    trip.stops.flatMap((stop) => {
+      const outlet = outletById.get(stop.order.outletId);
+      if (queued.has(stop.order.id) || !outlet) return [];
+      return [
+        {
+          ...stop.order,
+          submittedAt: null,
+          lockedAt: null,
+          version: 0,
+          deferredYesterday: false,
+          daysSinceLastServed: 0,
+          previousDeferral: null,
+          outlet: {
+            id: outlet.id,
+            district: outlet.district,
+            depotId: outlet.depotId,
+            parkingConstraint: outlet.parkingConstraint,
+            window: outlet.window,
+            mallWindow: outlet.mallWindow,
+          },
+        },
+      ];
+    }),
+  );
+  const items = [...queue.items, ...planned];
   const inputs = planningInput(
     date,
     depotId,
-    queue.items,
+    items,
     vehicles.items,
     outlets.items,
     travel.items,
@@ -79,8 +109,8 @@ async function load(date: string, depotId: string): Promise<Snapshot> {
     depotId,
     version: queue.planVersion,
     published: trips.items.some((trip) => trip.run.status === 'published'),
-    items: queue.items,
-    byId: new Map(queue.items.map((item) => [item.id, item])),
+    items,
+    byId: new Map(items.map((item) => [item.id, item])),
     vehicles: vehicles.items,
     trips: trips.items,
     slots,

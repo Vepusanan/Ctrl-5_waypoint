@@ -28,6 +28,8 @@ export async function loadPlanningContext(
   depotId: string,
   serviceDate: string,
   userScope: SQL,
+  /** Plan around these orders instead of the run's open queue (replanning a published run). */
+  orderOverride?: EligibleOrder[],
 ): Promise<PlanningContext> {
   const day = await repo.findCalendarDay(db, serviceDate);
   if (day === null) throw new ApiError('VALIDATION_ERROR', 'Service date is not on the calendar');
@@ -35,7 +37,8 @@ export async function loadPlanningContext(
     throw new ApiError('VALIDATION_ERROR', 'Service date is not an operating day');
   }
 
-  const orders = await repo.listEligibleOrders(db, depotId, serviceDate, userScope);
+  const orders =
+    orderOverride ?? (await repo.listEligibleOrders(db, depotId, serviceDate, userScope));
   const outletIds = unique(orders.map((order) => order.outletId));
   const districts = unique(orders.map((order) => order.district));
   const travelRows = await repo.listDistrictTravel(db, districts);

@@ -7,6 +7,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './app.tsx';
 import { linkManifest, UpdatePrompt } from './lib/pwa.tsx';
+// Loads after the app's own stylesheets, so its narrow-screen rules have the last word.
+import './styles/responsive.css';
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {

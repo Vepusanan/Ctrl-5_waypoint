@@ -57,10 +57,12 @@ export const orderStateMachine = createStateMachine<OrderStatus>('order', {
   draft: ['submitted', 'cancelled'],
   submitted: ['confirmed', 'cancelled'],
   confirmed: ['allocated', 'deferred'],
-  allocated: ['loading'],
+  // A replan after publish can defer an order that has not left the depot, or take it off a
+  // vehicle that broke down while loading and put it on another one.
+  allocated: ['loading', 'deferred'],
   // A deferred order re-enters the next run's queue and can be allocated there.
   deferred: ['allocated'],
-  loading: ['dispatched'],
+  loading: ['dispatched', 'allocated', 'deferred'],
   dispatched: ['delivered', 'failed'],
   delivered: ['receipt_confirmed'],
   failed: [],

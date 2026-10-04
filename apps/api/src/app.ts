@@ -11,10 +11,12 @@ import { authRoutes } from './modules/auth/routes.ts';
 import { dashboardRoutes } from './modules/dashboard/routes.ts';
 import { deliveryRoutes } from './modules/deliveries/routes.ts';
 import { healthRoutes } from './modules/health/routes.ts';
+import { insightRoutes } from './modules/insights/routes.ts';
 import { loadingRoutes } from './modules/loading/routes.ts';
 import { notificationRoutes } from './modules/notifications/routes.ts';
 import { orderRoutes } from './modules/orders/routes.ts';
 import { planningRoutes } from './modules/planning/routes.ts';
+import { savedViewRoutes } from './modules/planning/views.ts';
 import { receiptRoutes } from './modules/receipts/routes.ts';
 import { referenceRoutes } from './modules/reference/routes.ts';
 import { storeRoutes } from './modules/store/routes.ts';
@@ -37,6 +39,8 @@ export interface AppOptions {
   // Admin routes are registered only when this is true. Production leaves it false.
   demoMode?: boolean;
   seed?: DemoSeedConfig;
+  /** Sign-in attempts per address per minute. Defaults to 10 (SYSTEM_DESIGN §9.1). */
+  loginLimit?: number;
 }
 
 export async function buildApp({
@@ -46,6 +50,7 @@ export async function buildApp({
   secureCookies,
   demoMode = false,
   seed,
+  loginLimit,
 }: AppOptions) {
   const app = Fastify({
     logger,
@@ -84,10 +89,14 @@ export async function buildApp({
 
   await app.register(swaggerPlugin);
   await app.register(healthRoutes, { prefix: '/api' });
-  await app.register(authRoutes, { prefix: '/api/v1' });
+  await app.register(authRoutes, {
+    prefix: '/api/v1',
+    ...(loginLimit !== undefined ? { loginLimit } : {}),
+  });
   await app.register(referenceRoutes, { prefix: '/api/v1' });
   await app.register(orderRoutes, { prefix: '/api/v1' });
   await app.register(planningRoutes, { prefix: '/api/v1' });
+  await app.register(savedViewRoutes, { prefix: '/api/v1' });
   await app.register(tripRoutes, { prefix: '/api/v1' });
   await app.register(loadingRoutes, { prefix: '/api/v1' });
   await app.register(deliveryRoutes, { prefix: '/api/v1' });
@@ -96,6 +105,7 @@ export async function buildApp({
   await app.register(syncRoutes, { prefix: '/api/v1' });
   await app.register(notificationRoutes, { prefix: '/api/v1' });
   await app.register(dashboardRoutes, { prefix: '/api/v1' });
+  await app.register(insightRoutes, { prefix: '/api/v1' });
   if (demoMode) {
     if (seed === undefined) {
       throw new Error('DEMO_MODE requires seed configuration');

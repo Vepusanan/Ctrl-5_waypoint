@@ -1,5 +1,5 @@
 import type { Brand, OrderStatus, Role, TemperatureRequirement } from '@waypoint/shared';
-import { DEMO_USERS, HOME_DEPOT_ID, RNG_SEED } from './constants.ts';
+import { DEMO_SERVICE_DATE, DEMO_USERS, HOME_DEPOT_ID, RNG_SEED } from './constants.ts';
 import { colombo, previousCalendarDate, seedUuid } from './ids.ts';
 import { createRng } from './rng.ts';
 import type {
@@ -270,6 +270,11 @@ export function buildDemoDay(reference: ReferenceData, serviceDate: string): Dem
       { ...DEMO_USERS.loader, depotId: home },
       { ...DEMO_USERS.driver, vehicleId: driverVan.id },
       { ...DEMO_USERS.storeManager, outletId: store.id },
+      // Every other vehicle at the depot has a driver too, so any published trip can be run.
+      ...reference.vehicles
+        .filter((vehicle) => vehicle.depotId === home && vehicle.id !== driverVan.id)
+        .sort(byId)
+        .map((vehicle) => fleetDriver(vehicle.id)),
     ],
     vehicleAvailability: availability,
     orders,
@@ -316,6 +321,17 @@ export function buildDemoDay(reference: ReferenceData, serviceDate: string): Dem
   };
 }
 
+/** The account that drives one vehicle: driver.veh012@waypoint.test for VEH012. */
+function fleetDriver(vehicleId: string): DemoAccount {
+  return {
+    key: `user:driver:${vehicleId}`,
+    role: 'driver',
+    name: `Driver ${vehicleId}`,
+    email: `driver.${vehicleId.toLowerCase()}@waypoint.test`,
+    vehicleId,
+  };
+}
+
 export function resolveServiceDate(
   calendar: CalendarDayRecord[],
   requested: string | undefined,
@@ -326,8 +342,8 @@ export function resolveServiceDate(
     if (!day.isOperating) throw new Error(`DEMO_DATE ${requested} is not an operating day`);
     return requested;
   }
-  const preferred = calendar.find((entry) => entry.date === '2026-06-26' && entry.isOperating);
-  if (preferred !== undefined) return '2026-06-26';
+  const preferred = calendar.find((entry) => entry.date === DEMO_SERVICE_DATE && entry.isOperating);
+  if (preferred !== undefined) return DEMO_SERVICE_DATE;
   const operating = calendar
     .filter((entry) => entry.isOperating)
     .sort((left, right) => left.date.localeCompare(right.date));

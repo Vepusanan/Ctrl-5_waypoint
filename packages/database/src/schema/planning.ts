@@ -5,6 +5,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgTable,
   smallint,
   text,
@@ -153,5 +154,28 @@ export const fuelLedger = pgTable(
     index('fuel_ledger_vehicle_week').on(table.vehicleId, table.isoYear, table.isoWeek),
     check('fuel_ledger_iso_week', sql`${table.isoWeek} between 1 and 53`),
     check('fuel_ledger_litres_nonnegative', sql`${table.litres} >= 0`),
+  ],
+);
+
+// Saved planning-queue views. A private view belongs to its owner; a team view is shared with
+// every dispatcher. `filters` is the queue's own filter object, stored as the client sent it.
+export const savedViews = pgTable(
+  'saved_views',
+  {
+    id: operationalId(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    audience: text('audience').notNull().default('private'),
+    pinned: boolean('pinned').notNull().default(false),
+    filters: jsonb('filters').$type<Record<string, unknown>>().notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: eventTimestamp('created_at').notNull().defaultNow(),
+  },
+  (table) => [
+    index('saved_views_user_id').on(table.userId),
+    check('saved_views_name_present', sql`${table.name} <> ''`),
+    check('saved_views_audience', sql`${table.audience} in ('private', 'team')`),
   ],
 );

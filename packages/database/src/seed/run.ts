@@ -1,4 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
+import { addCalendarDays, CALENDAR_HORIZON_DAYS, withCalendarHorizon } from '../calendar.ts';
 import type { Database } from '../client.ts';
 import { auditLog } from '../schema/cross-cutting.ts';
 import { users } from '../schema/identity.ts';
@@ -6,6 +7,7 @@ import { orders } from '../schema/orders.ts';
 import { deferrals, planningRuns } from '../schema/planning.ts';
 import {
   calendarDays,
+  demandHistory,
   depots,
   districtTravel,
   outlets,
@@ -22,6 +24,9 @@ import { hashSeedPassword } from './password.ts';
 import type { ReferenceData } from './types.ts';
 
 const SEEDED_TABLES = [
+  'demand_history',
+  'saved_views',
+  'loading_counts',
   'sync_conflicts',
   'audit_log',
   'notifications',
@@ -88,9 +93,23 @@ export async function seedDatabase(db: Database, options: SeedOptions): Promise<
     }
   }
 
-  const reference =
+  const loaded =
     options.reference ??
     (await loadReference(referenceRoots(options.dataDir, options.cwd ?? process.cwd())));
+  // The demo day may sit at, or past, the end of the supplied calendar. Days after it are
+  // generated, so there is always a next run to order for.
+  const lastLoaded = loaded.calendarDays.reduce(
+    (latest, day) => (day.date > latest ? day.date : latest),
+    '',
+  );
+  const anchor = [lastLoaded, options.demoDate ?? ''].sort().at(-1) ?? lastLoaded;
+  const reference = {
+    ...loaded,
+    calendarDays: withCalendarHorizon(
+      loaded.calendarDays,
+      addCalendarDays(anchor, CALENDAR_HORIZON_DAYS),
+    ),
+  };
   const serviceDate = resolveServiceDate(reference.calendarDays, options.demoDate);
   const day = buildDemoDay(reference, serviceDate);
   const passwordHash = await hashSeedPassword(options.password);
@@ -106,8 +125,13 @@ export async function seedDatabase(db: Database, options: SeedOptions): Promise<
     await tx.insert(districtTravel).values(reference.districtTravel);
     await tx.insert(outlets).values(reference.outlets);
     await tx.insert(vehicles).values(reference.vehicles);
-    await tx.insert(calendarDays).values(reference.calendarDays);
+    for (let start = 0; start < reference.calendarDays.length; start += 500) {
+      await tx.insert(calendarDays).values(reference.calendarDays.slice(start, start + 500));
+    }
     await tx.insert(serviceAllowances).values(reference.serviceAllowances);
+    for (let start = 0; start < reference.demandHistory.length; start += 1000) {
+      await tx.insert(demandHistory).values(reference.demandHistory.slice(start, start + 1000));
+    }
     await tx.insert(users).values(
       day.accounts.map((account) => ({
         id: seedUuid(account.key),

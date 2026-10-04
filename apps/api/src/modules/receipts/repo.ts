@@ -54,6 +54,9 @@ export interface IssueRow {
   status: IssueStatus;
   createdBy: string;
   createdAt: Date;
+  resolvedBy: string | null;
+  resolvedAt: Date | null;
+  resolution: string | null;
 }
 
 interface NotificationDraft {
@@ -89,7 +92,19 @@ export interface ReceiptRepo {
   insertIssue(db: ReceiptDb, row: InsertIssue): Promise<IssueRow>;
   listIssues(db: ReceiptDb, orderScope: SQL): Promise<IssueRow[]>;
   findIssue(db: ReceiptDb, orderScope: SQL, issueId: string): Promise<IssueRow | null>;
+  /** Locks the issue row and returns it with its order's outlet and depot. */
+  lockIssue(
+    db: ReceiptDb,
+    orderScope: SQL,
+    issueId: string,
+  ): Promise<(IssueRow & { outletId: string; depotId: string }) | null>;
+  resolveIssue(
+    db: ReceiptDb,
+    issueId: string,
+    resolution: { by: string; at: Date; note: string },
+  ): Promise<IssueRow | null>;
   listDispatchers(db: ReceiptDb, depotId: string): Promise<{ id: string }[]>;
+  listStoreManagers(db: ReceiptDb, outletId: string): Promise<{ id: string }[]>;
   insertNotifications(db: ReceiptDb, rows: readonly NotificationDraft[]): Promise<void>;
 }
 
@@ -117,6 +132,9 @@ const issueColumns = {
   status: issues.status,
   createdBy: issues.createdBy,
   createdAt: issues.createdAt,
+  resolvedBy: issues.resolvedBy,
+  resolvedAt: issues.resolvedAt,
+  resolution: issues.resolution,
 };
 
 export function createReceiptRepo(): ReceiptRepo {
@@ -212,6 +230,32 @@ export function createReceiptRepo(): ReceiptRepo {
       return rows[0] ?? null;
     },
 
+    async lockIssue(db, orderScope, issueId) {
+      const rows = await db
+        .select({ ...issueColumns, outletId: orders.outletId, depotId: outlets.depotId })
+        .from(issues)
+        .innerJoin(orders, eq(orders.id, issues.orderId))
+        .innerJoin(outlets, eq(outlets.id, orders.outletId))
+        .where(and(eq(issues.id, issueId), orderScope))
+        .limit(1)
+        .for('update', { of: issues });
+      return rows[0] ?? null;
+    },
+
+    async resolveIssue(db, issueId, resolution) {
+      const rows = await db
+        .update(issues)
+        .set({
+          status: 'resolved',
+          resolvedBy: resolution.by,
+          resolvedAt: resolution.at,
+          resolution: resolution.note,
+        })
+        .where(and(eq(issues.id, issueId), eq(issues.status, 'open')))
+        .returning(issueColumns);
+      return rows[0] ?? null;
+    },
+
     async listDispatchers(db, depotId) {
       return db
         .select({ id: users.id })
@@ -219,6 +263,13 @@ export function createReceiptRepo(): ReceiptRepo {
         .where(
           and(eq(users.role, 'dispatcher'), or(eq(users.depotId, depotId), isNull(users.depotId))),
         );
+    },
+
+    async listStoreManagers(db, outletId) {
+      return db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.role, 'store_manager'), eq(users.outletId, outletId)));
     },
 
     async insertNotifications(db, rows) {

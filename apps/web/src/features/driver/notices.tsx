@@ -38,6 +38,7 @@ const noticeTitle: Record<NotificationType, string> = {
   order_confirmed: 'Order confirmed',
   order_deferred: 'Order deferred',
   receipt_discrepancy: 'Receipt discrepancy',
+  issue_resolved: 'Issue resolved',
 };
 
 // DR07 `2106:10706`–`2106:10741`: what the notice is about decides the icon, and whether it still

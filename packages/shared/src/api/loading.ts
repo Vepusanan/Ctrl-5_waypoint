@@ -10,6 +10,8 @@ export const loadingStopSchema = z.object({
   seq: z.int().positive(),
   plannedArrival: timestampSchema,
   order: tripOrderSummarySchema,
+  /** Cartons the loader has counted onto the vehicle for this stop. */
+  loadedUnits: z.int().nonnegative().default(0),
   chilled: z.boolean(),
   access: parkingConstraintSchema,
 });

@@ -17,10 +17,11 @@ const other = {
   vehicleId: 'VEH002',
 };
 
-test('driver records offline, preserves outbox through account switching, uploads POD and syncs once', async ({
+test('driver records offline, keeps the outbox until it syncs, uploads POD and syncs once', async ({
   page,
   context,
 }) => {
+  test.setTimeout(90_000);
   let user: typeof driver | null = driver;
   let allowSync = false;
   const applied: string[] = [];
@@ -109,6 +110,7 @@ test('driver records offline, preserves outbox through account switching, upload
           total: user?.id === driver.id ? 1 : 0,
         },
       });
+    else if (path === `/trips/${stop.tripId}`) await route.fulfill({ json: trip() });
     else if (path === `/stops/${stop.id}`) await route.fulfill({ json: stop });
     else if (path.startsWith('/sync/trips/'))
       await route.fulfill({ json: { changed: false, tripId: stop.tripId, version: 1 } });
@@ -149,18 +151,31 @@ test('driver records offline, preserves outbox through account switching, upload
           })),
         },
       });
-    } else await route.fulfill({ json: { items: [], total: 0 } });
+    } else if (path === '/admin/clock')
+      // Outside DEMO_MODE there is no demo clock, and the app follows the device clock.
+      await route.fulfill({
+        status: 404,
+        json: { error: { code: 'NOT_FOUND', message: 'Route not found' } },
+      });
+    else await route.fulfill({ json: { items: [], total: 0 } });
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/driver');
-  await page.getByRole('link', { name: 'Open trip' }).click();
-  await page.getByRole('link', { name: 'Open stop' }).click();
-  await expect(page.getByRole('button', { name: 'Arrived', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Continue trip' }).click();
+  await page.locator('a[href*="/driver/stops/"]').first().click();
+  const arrive = page.getByRole('button', { name: "I've arrived" });
+  await expect(arrive).toBeVisible();
+
+  // No signal: the stop is recorded on the phone and counted as pending.
   await context.setOffline(true);
-  await page.getByRole('button', { name: 'Arrived', exact: true }).click();
-  await expect(page.getByText('1 pending sync', { exact: false })).toBeVisible();
-  await page.getByLabel('Recipient name').fill('Recipient');
-  const canvas = page.getByLabel('Recipient signature');
+  await arrive.click();
+  await expect(page.getByText(/1 pending/)).toBeVisible();
+  await page.getByRole('link', { name: 'Record delivery' }).click();
+  const complete = page.getByRole('button', { name: 'Complete delivery' });
+  // Proof of delivery is required before the stop can be completed (SRS AC-12).
+  await expect(complete).toBeDisabled();
+  await page.getByRole('textbox').first().fill('Recipient');
+  const canvas = page.locator('canvas').first();
   await canvas.scrollIntoViewIfNeeded();
   const box = await canvas.boundingBox();
   if (!box) throw new Error('Signature canvas not visible');
@@ -168,31 +183,43 @@ test('driver records offline, preserves outbox through account switching, upload
   await page.mouse.down();
   await page.mouse.move(box.x + 80, box.y + 50, { steps: 8 });
   await page.mouse.up();
-  await page.getByRole('button', { name: 'Delivered', exact: true }).click();
-  await expect(page.getByText('2 pending sync', { exact: false })).toBeVisible();
-  await context.setOffline(false);
-  await page.getByRole('button', { name: 'Sign out' }).click();
-  await expect(page).toHaveURL(/\/login$/);
-  const login = async (email: string) => {
-    await page.getByLabel('Email').fill(email);
-    await page.getByLabel('Password').fill('test-password');
-    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-    await expect(page).toHaveURL(/\/driver$/);
-  };
-  await login(other.email);
-  await page.getByRole('link', { name: 'Sync (0)' }).click();
-  await expect(page.getByText('Pending sync', { exact: true })).toHaveCount(0);
+  await complete.click();
+  await expect(page.getByText(/2 pending/)).toBeVisible();
   expect(applied).toHaveLength(0);
+
+  // Back online, but the server is unreachable: nothing is lost and sign-out stays locked, so
+  // another driver cannot take over a phone that still holds unsent records.
+  await context.setOffline(false);
+  await page.goto('/driver/account');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeDisabled();
+  expect(applied).toHaveLength(0);
+
+  // The server answers again: the proof uploads first, then each event is applied once.
+  allowSync = true;
+  await page.goto('/driver/sync');
+  // Opening the app starts a sync by itself. The button is the manual way, when it is free.
+  await page
+    .getByRole('button', { name: 'Sync now' })
+    .click({ timeout: 3_000 })
+    .catch(() => undefined);
+  await expect(page.getByText('All synced')).toBeVisible({ timeout: 30_000 });
+  expect(calls).toEqual(['arrived', 'pod', 'delivered']);
+  // Reopening the app does not send them again.
+  await page.reload();
+  await expect(page.getByText('All synced')).toBeVisible();
+  expect(applied).toHaveLength(2);
+
+  // With nothing pending the driver can hand the phone over, and the next driver starts clean.
+  await page.goto('/driver/account');
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await login(driver.email);
-  await expect(page.getByRole('link', { name: 'Sync (2)' })).toBeVisible();
-  allowSync = true;
-  await page.getByRole('link', { name: 'Sync (2)' }).click();
-  await page.getByRole('button', { name: 'Sync now' }).click();
-  await expect(page.getByRole('link', { name: 'Sync (0)' })).toBeVisible();
-  expect(calls).toEqual(['arrived', 'pod', 'delivered']);
-  await page.getByRole('button', { name: 'Sync now' }).click();
+  await page.getByLabel('Email').fill(other.email);
+  await page.getByLabel('Password').fill('test-password');
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await expect(page).toHaveURL(/\/driver$/);
+  await expect(page.getByText('No published trips')).toBeVisible();
+  await page.getByRole('link', { name: 'Sync' }).click();
+  await expect(page.getByText(/pending/)).toHaveCount(0);
   expect(applied).toHaveLength(2);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

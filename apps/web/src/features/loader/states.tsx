@@ -142,8 +142,8 @@ export function PlanChanged({ flow }: { flow: LoadFlow }) {
           Plan changed · trip version {state.acceptedTripVersion ?? '?'} → {state.tripVersion}
         </strong>
         <p>
-          The dispatcher updated this trip and your counts were cleared. Acknowledge before you
-          continue.
+          The dispatcher updated this trip. Check the counts against the new list and acknowledge
+          before you continue.
         </p>
       </div>
       <div className="loader-split">

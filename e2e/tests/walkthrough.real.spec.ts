@@ -2,7 +2,7 @@ import { type Browser, expect, type Page, test } from '@playwright/test';
 
 // The judge walkthrough (SRS §51) across the four seeded accounts, against the real stack:
 // order -> cutoff -> plan -> deferral -> publish -> load -> shortfall -> deliver (one stop offline)
-// -> receipt -> audit. It resets the demo data first, so never point it at data worth keeping.
+// -> receipt -> issue resolved -> audit. It resets the demo data first, so never point it at data worth keeping.
 const password = process.env.SEED_PASSWORD ?? 'waypoint-demo';
 
 async function signIn(
@@ -166,7 +166,20 @@ test('one order travels from the store to a confirmed receipt across all four ro
     .click();
   await expect(store.getByText(/Receipt confirmed/).first()).toBeVisible();
 
-  // 6. Dispatcher sees the whole story in the audit trail.
+  // 6. Dispatcher resolves the store's issue, with the driver's proof beside it.
+  await dispatcher.goto('/dispatcher/issues');
+  await expect(dispatcher.getByRole('img', { name: 'Recipient signature' })).toBeVisible();
+  await dispatcher.getByRole('button', { name: 'Resolve issue' }).click();
+  await expect(dispatcher.getByText(/Write what was decided/)).toBeVisible();
+  await dispatcher
+    .getByRole('textbox', { name: /Resolution/ })
+    .fill('Credit note raised. Replacement carton on the next run.');
+  await dispatcher.getByRole('button', { name: 'Resolve issue' }).click();
+  await expect(dispatcher.getByText('Issue resolved', { exact: true })).toBeVisible();
+  await store.goto('/store/issues');
+  await expect(store.getByText(/Credit note raised/).first()).toBeVisible();
+
+  // 7. Dispatcher sees the whole story in the audit trail.
   const received = await dispatcher.request.get('/api/v1/orders?status=receipt_confirmed');
   expect(received.status()).toBe(200);
   const { items } = (await received.json()) as { items: { id: string }[] };
@@ -180,6 +193,7 @@ test('one order travels from the store to a confirmed receipt across all four ro
     'Delivered',
     'Receipt issue reported',
     'Receipt confirmed',
+    'Receipt issue resolved',
   ]) {
     await expect(log.getByRole('cell', { name: event, exact: true }).first()).toBeVisible();
   }

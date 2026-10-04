@@ -4,6 +4,7 @@ import type {
   LoadingIssue,
   LoadingState,
   LoadingStatus,
+  SetLoadingCountRequest,
   User,
 } from '@waypoint/shared';
 import {
@@ -36,6 +37,8 @@ const UNPUBLISHED = 'Trip has not been published';
 const NOT_OPEN = 'Loading is not open for issues';
 const NOT_VERIFIABLE = 'Loading can only be verified while it is in progress or has an exception';
 const NOT_ON_TRIP = 'Order is not on this trip';
+const NOT_COUNTABLE = 'Cartons can only be counted while loading is in progress';
+const COUNT_OVER = 'The count cannot exceed the cartons on the order';
 const QTY = 'Issue quantity exceeds the order';
 const ORDER = 'Order is not ready to load';
 const ALREADY_ACK = 'Loading issue is already acknowledged';
@@ -55,6 +58,7 @@ export interface LoadingService {
     version: number,
     input: CreateLoadingIssueRequest,
   ): Promise<LoadingState>;
+  setCount(user: User | null, tripId: string, input: SetLoadingCountRequest): Promise<LoadingState>;
   acknowledge(user: User | null, issueId: string): Promise<LoadingIssue>;
   ready(user: User | null, tripId: string, version: number): Promise<LoadingState>;
 }
@@ -162,6 +166,7 @@ export function createLoadingService(
               seq: stop.seq,
               orderId: stop.orderId,
               units: stop.units,
+              loadedUnits: stop.loadedUnits,
               temp: stop.temp,
             })),
           },
@@ -239,6 +244,30 @@ export function createLoadingService(
       });
       publish(events, pending);
       return state;
+    },
+
+    // The count is the loader's working tally, saved so a refresh or another tablet shows it.
+    // It is not versioned: a plan change is caught at verify, which is what gates Ready.
+    async setCount(user, tripId, input) {
+      const loader = assertLoader(user);
+      return db.transaction(async (tx) => {
+        const trip = await lockedTrip(repo, tx, loader, tripId);
+        const loading = await repo.lockLoading(tx, trip.id);
+        if (loading === null || !OPEN.includes(loading.status)) {
+          throw new ApiError('CONSTRAINT_VIOLATION', NOT_COUNTABLE);
+        }
+        const order = await repo.orderOnTrip(tx, trip.id, input.orderId);
+        if (order === null) throw new ApiError('CONSTRAINT_VIOLATION', NOT_ON_TRIP);
+        if (input.units > order.units) throw new ApiError('CONSTRAINT_VIOLATION', COUNT_OVER);
+        await repo.saveCount(tx, {
+          tripId: trip.id,
+          orderId: input.orderId,
+          units: input.units,
+          loaderId: loader.id,
+          at: clock.now(),
+        });
+        return toState(await requiredBundle(repo, tx, loader, trip.id));
+      });
     },
 
     async acknowledge(user, issueId) {
@@ -435,6 +464,7 @@ function toState(bundle: LoadingBundle): LoadingState {
         volumeM3: stop.volumeM3,
         status: stop.orderStatus,
       },
+      loadedUnits: stop.loadedUnits,
       chilled: stop.temp === 'chilled',
       access: stop.parkingConstraint,
     })),

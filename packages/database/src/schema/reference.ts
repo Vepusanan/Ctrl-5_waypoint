@@ -165,3 +165,27 @@ export const vehicleAvailability = pgTable(
     index('vehicle_availability_date').on(table.date),
   ],
 );
+
+// Daily demand by depot and brand, aggregated from the supplied order history at seed time.
+// Analytics reads it for the weeks before the platform's own orders exist. Each order counts
+// once, on the day the store asked for (SRS BR-017, BR-018).
+export const demandHistory = pgTable(
+  'demand_history',
+  {
+    date: date('date').notNull(),
+    depotId: text('depot_id')
+      .notNull()
+      .references(() => depots.id),
+    brand: brandEnum('brand').notNull(),
+    orders: integer('orders').notNull(),
+    volumeM3: quantity('volume_m3').notNull(),
+    chilledVolumeM3: quantity('chilled_volume_m3').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.date, table.depotId, table.brand] }),
+    check(
+      'demand_history_nonnegative',
+      sql`${table.orders} >= 0 and ${table.volumeM3} >= 0 and ${table.chilledVolumeM3} >= 0`,
+    ),
+  ],
+);

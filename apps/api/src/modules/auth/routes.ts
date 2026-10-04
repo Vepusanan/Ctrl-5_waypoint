@@ -5,9 +5,10 @@ import { ApiError } from '../../plugins/errors.ts';
 import { everyRole } from '../../plugins/rbac.ts';
 import { clearSessionCookieOptions, SESSION_COOKIE, sessionCookieOptions } from './cookies.ts';
 
-const LOGIN_LIMIT = 10;
+// SYSTEM_DESIGN §9.1: ten sign-in attempts a minute per address unless the deploy sets another.
+const DEFAULT_LOGIN_LIMIT = 10;
 
-export const authRoutes: FastifyPluginAsyncZod = async (app) => {
+export const authRoutes: FastifyPluginAsyncZod<{ loginLimit?: number }> = async (app, options) => {
   app.addHook('onSend', async (request, reply) => {
     if (request.url.startsWith('/api/v1/auth/')) reply.header('Cache-Control', 'no-store');
   });
@@ -19,7 +20,9 @@ export const authRoutes: FastifyPluginAsyncZod = async (app) => {
   app.post(
     '/auth/login',
     {
-      config: { rateLimit: { max: LOGIN_LIMIT, timeWindow: '1 minute' } },
+      config: {
+        rateLimit: { max: options.loginLimit ?? DEFAULT_LOGIN_LIMIT, timeWindow: '1 minute' },
+      },
       schema: {
         tags: ['auth'],
         body: loginRequestSchema,

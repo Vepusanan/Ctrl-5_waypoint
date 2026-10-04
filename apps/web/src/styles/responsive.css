@@ -1,0 +1,119 @@
+/*
+ * Cross-workspace responsive rules. This file loads after every feature stylesheet, so it only
+ * holds what must hold on every screen: touch-target sizes on tablets and phones, and the few
+ * components that need a different shape when the page is narrow.
+ */
+
+/* Touch targets: 44px on anything driven by a finger (SYSTEM_DESIGN §10.5). */
+@media (max-width: 800px), (pointer: coarse) {
+  body .wp-segmented button,
+  body .wp-tabs button,
+  body .wp-dropdown,
+  body .wp-dropdown select {
+    min-height: 44px;
+  }
+  body .wp-segmented button {
+    padding-inline: var(--space-16);
+  }
+  body .wp-chip {
+    min-height: 40px;
+  }
+  body button.wp-icon-well,
+  body button.wp-icon-bare {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  /* The switch keeps its drawn size; the invisible margin makes the tap area 44px tall. */
+  body .wp-switch {
+    margin-block: 9px;
+    outline-offset: 4px;
+  }
+  body .wp-switch::before {
+    content: "";
+    position: absolute;
+    inset: -9px 0;
+  }
+  body .dq-search,
+  body .oa-search {
+    height: 44px;
+  }
+  body .st-issue-link {
+    min-height: 44px;
+    padding-inline: var(--space-8);
+  }
+  body .st-stepper input {
+    min-height: 40px;
+  }
+  body .ou-pick {
+    min-height: 44px;
+  }
+  body .lvm-trip-text {
+    min-height: 44px;
+    justify-content: center;
+  }
+}
+
+/* A scrolling table keeps its own visually hidden labels inside the scroll area. */
+.st-table-scroll,
+.wp-table-scroll {
+  position: relative;
+}
+
+/* Large display figures wrap instead of pushing their card past the page edge. */
+.st-display {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  /* Ten lifecycle steps do not fit side by side: they scroll, each at a readable width. */
+  .oa-lifecycle li {
+    flex: 0 0 76px;
+  }
+}
+
+@media (max-width: 800px) {
+  /* Card headers stack their actions under the title instead of squeezing them off the card. */
+  .d-head {
+    flex-wrap: wrap;
+  }
+  .d-head-actions {
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+  .df-hint {
+    flex-basis: 100%;
+    order: 2;
+  }
+  /* Queue: the view tabs take their own row, with search, filter and columns under them. */
+  .dq-toolbar {
+    flex-wrap: wrap;
+  }
+  .dq-toolbar .wp-tabs {
+    flex: 1 0 100%;
+  }
+  .dq-search {
+    flex: 1 1 160px;
+    width: auto;
+  }
+  /* Overlays use the full width of a phone, and their footers stack. */
+  .wp-sheet-foot {
+    flex-wrap: wrap;
+  }
+  .wp-sheet-foot > * {
+    flex: 1 1 140px;
+  }
+}
+
+@media (max-width: 700px) {
+  /* Fourteen weekly bars scroll sideways at a size that can still be read. */
+  .an-chart {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .an-chart ol,
+  .an-chart .an-capacity {
+    width: 560px;
+    right: auto;
+  }
+}

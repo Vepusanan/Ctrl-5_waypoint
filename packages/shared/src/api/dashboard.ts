@@ -166,6 +166,7 @@ export const dashboardStreamEventTypeSchema = z.enum([
   'stop.pod_recorded',
   'receipt.confirmed',
   'issue.reported',
+  'issue.resolved',
   'sync.conflict',
 ]);
 export type DashboardStreamEventType = z.infer<typeof dashboardStreamEventTypeSchema>;

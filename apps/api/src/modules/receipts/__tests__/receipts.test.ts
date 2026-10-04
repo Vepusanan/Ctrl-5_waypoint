@@ -268,6 +268,53 @@ describe('receipts and store issues', () => {
     ).toBe(403);
   });
 
+  it('lets the dispatcher resolve an issue once, with a note the store can read', async () => {
+    const delivery = await insertDelivery({
+      outletId: 'OUT501',
+      stopStatus: 'delivered',
+      orderStatus: 'delivered',
+    });
+    const issue = issueSchema.parse(
+      json(await postIssue(store.cookie, { orderId: delivery.orderId, type: 'damaged' }), 201),
+    );
+    const resolve = (cookie: string, resolution: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/issues/${issue.id}/resolve`,
+        headers: { cookie },
+        payload: { resolution },
+      });
+    expect((await resolve(store.cookie, 'Closed by the store')).statusCode).toBe(403);
+    expect((await resolve(dispatcher.cookie, '   ')).statusCode).toBe(400);
+
+    const resolved = issueSchema.parse(
+      json(await resolve(dispatcher.cookie, 'Credit note raised'), 200),
+    );
+    expect(resolved).toMatchObject({
+      id: issue.id,
+      status: 'resolved',
+      resolution: 'Credit note raised',
+      resolvedBy: dispatcher.user.id,
+      resolvedAt: PINNED,
+    });
+    expect((await resolve(dispatcher.cookie, 'Again')).statusCode).toBe(422);
+
+    const seen = issueListResponseSchema.parse(json(await listIssues(store.cookie), 200));
+    expect(seen.items[0]).toMatchObject({ status: 'resolved', resolution: 'Credit note raised' });
+    const notes = await database.db.select().from(notifications);
+    expect(notes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          recipientId: store.user.id,
+          type: 'issue_resolved',
+          entityId: issue.id,
+        }),
+      ]),
+    );
+    const audit = await database.db.select().from(auditLog);
+    expect(audit.map((row) => row.action)).toContain('issue.resolved');
+  });
+
   it('lets the dispatcher read an issue and hides it from another store', async () => {
     const delivery = await insertDelivery({
       outletId: 'OUT501',

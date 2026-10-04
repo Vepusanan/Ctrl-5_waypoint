@@ -14,6 +14,7 @@ import { parseCsv, requireCell } from './csv.ts';
 import { syntheticReference } from './synthetic.ts';
 import type {
   CalendarDayRecord,
+  DemandHistoryRecord,
   DepotRecord,
   DistrictTravelRecord,
   OrderSizeRecord,
@@ -99,10 +100,15 @@ async function readDataset(files: Map<string, string>): Promise<ReferenceData> {
   const districtTravel = parseDistrictTravel(await readTable('district_travel.csv', files));
   const depots = depotsFrom(outlets, vehicles, districtTravel);
   const historical = files.get(HISTORICAL_ORDERS_FILE);
+  const historicalRows =
+    historical === undefined ? null : parseCsv(await readFile(historical, 'utf8'));
   const orderSizes =
-    historical === undefined
-      ? syntheticReference.orderSizes
-      : parseOrderSizes(parseCsv(await readFile(historical, 'utf8')));
+    historicalRows === null ? syntheticReference.orderSizes : parseOrderSizes(historicalRows);
+  const knownDepots = new Set(depots.map((depot) => depot.id));
+  const demandHistory =
+    historicalRows === null
+      ? syntheticReference.demandHistory
+      : parseDemandHistory(historicalRows).filter((row) => knownDepots.has(row.depotId));
   return {
     source: 'dataset',
     depots,
@@ -112,6 +118,7 @@ async function readDataset(files: Map<string, string>): Promise<ReferenceData> {
     districtTravel,
     serviceAllowances: parseAllowances(await readTable('service_allowance.csv', files)),
     orderSizes,
+    demandHistory,
   };
 }
 
@@ -253,6 +260,44 @@ function parseOrderSizes(rows: Record<string, string>[]): OrderSizeRecord[] {
     throw new Error('deliveries_train.csv has no usable order sizes');
   }
   return sizes;
+}
+
+// Every order counts once on its requested date, whatever happened to it afterwards.
+function parseDemandHistory(rows: Record<string, string>[]): DemandHistoryRecord[] {
+  const days = new Map<string, DemandHistoryRecord>();
+  for (const row of rows) {
+    // A cut-down history file without dates still gives order sizes; it has no demand series.
+    const date = row.order_date?.trim() ?? '';
+    const depotId = row.depot?.trim() ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || depotId === '') continue;
+    const brand = oneOf(
+      requireCell(row, 'brand', 'deliveries_train.csv'),
+      brandSchema.options,
+      'deliveries_train.csv brand',
+    );
+    const volume = numberCell(row, 'order_volume_m3', 'deliveries_train.csv');
+    if (!(volume > 0)) continue;
+    const name = `${date}|${depotId}|${brand}`;
+    const day = days.get(name) ?? {
+      date,
+      depotId,
+      brand,
+      orders: 0,
+      volumeM3: 0,
+      chilledVolumeM3: 0,
+    };
+    day.orders += 1;
+    day.volumeM3 += volume;
+    if (requireCell(row, 'temp_requirement', 'deliveries_train.csv') === 'chilled') {
+      day.chilledVolumeM3 += volume;
+    }
+    days.set(name, day);
+  }
+  return [...days.values()].map((day) => ({
+    ...day,
+    volumeM3: round3(day.volumeM3),
+    chilledVolumeM3: round3(day.chilledVolumeM3),
+  }));
 }
 
 function depotsFrom(

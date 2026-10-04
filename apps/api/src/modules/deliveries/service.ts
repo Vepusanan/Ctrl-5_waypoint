@@ -1,4 +1,4 @@
-import type { Database } from '@waypoint/database';
+import { type Database, eq, orders } from '@waypoint/database';
 import type { DeliveryStop, Pod, StopEventInput, User } from '@waypoint/shared';
 import type { AuditRecorder } from '../../plugins/audit.ts';
 import type { OperatingClock } from '../../plugins/clock.ts';
@@ -14,6 +14,7 @@ import {
   windowLabel,
 } from './apply.ts';
 import { shiftedEta } from './eta.ts';
+import { imageKind } from './images.ts';
 import {
   createDeliveryRepo,
   type DeliveryRepo,
@@ -22,11 +23,17 @@ import {
 } from './repo.ts';
 
 const MISSING = 'Stop not found';
+const NO_IMAGE = 'No image is stored for this stop';
 
 export interface DeliveryService {
   get(user: User | null, stopId: string): Promise<DeliveryStop>;
   recordEvent(user: User | null, stopId: string, input: StopEventInput): Promise<AppliedStopEvent>;
   recordPod(user: User | null, stopId: string, upload: PodUpload): Promise<Pod>;
+  podImage(
+    user: User | null,
+    stopId: string,
+    kind: 'signature' | 'photo',
+  ): Promise<{ bytes: Buffer; contentType: string }>;
 }
 
 export function createDeliveryService(
@@ -50,6 +57,23 @@ export function createDeliveryService(
       const eta = shiftedEta(stops, arrivals, row.id);
       if (eta === null) throw new ApiError('INTERNAL_ERROR', 'Stop is missing from its trip');
       return toStop(row, eta, pod, failureReason);
+    },
+
+    // SRS §40: proof of delivery is protected from cross-role and cross-outlet access. The
+    // dispatcher sees their depot's stops, the driver their own vehicle's, and the store manager
+    // only stops that delivered to their outlet. The image is served from the one stored copy.
+    async podImage(user, stopId, kind) {
+      if (user === null) throw new ApiError('UNAUTHENTICATED', 'Sign in required');
+      if (user.role === 'loader') {
+        throw new ApiError('FORBIDDEN', 'You do not have access to this action');
+      }
+      const access =
+        user.role === 'store_manager' ? eq(orders.outletId, user.outletId) : scope(user).trips;
+      const result = await repo.findPodImage(db, access, stopId, kind);
+      if (!result.found || result.image === null) throw new ApiError('NOT_FOUND', NO_IMAGE);
+      const format = imageKind(result.image);
+      if (format === null) throw new ApiError('NOT_FOUND', NO_IMAGE);
+      return { bytes: result.image, contentType: `image/${format}` };
     },
 
     async recordEvent(user, stopId, input) {

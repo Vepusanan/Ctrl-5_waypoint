@@ -87,6 +87,11 @@ An idempotent seed does not change existing passwords.
 | Loader | loader@waypoint.test | Peliyagoda depot | /loader |
 | Driver | driver@waypoint.test | The reefer van kept available at Peliyagoda | /driver |
 | Store Manager | store.manager@waypoint.test | A van-only Fresh outlet, so its chilled order rides the driver's van | /store |
+| Other drivers | driver.veh012@waypoint.test (one per vehicle id) | That vehicle only | /driver |
+
+Every vehicle at the depot has a driver account, named after its vehicle id in lower case. A driver
+sees the trips of their own vehicle and nothing else; the scope comes from the account's vehicle
+on the server, so two drivers on two phones work independently.
 
 With `DEMO_MODE=true`, startup sets the operating clock before the seeded service day’s cutoff so Store ordering remains usable. The seed report prints the actual vehicle/outlet assignments. Loader/Driver lists remain empty until a plan is published.
 `/dispatch` redirects to `/dispatcher` for existing links.
@@ -119,8 +124,33 @@ fresh seed (Dispatcher → account menu "⋯" → Reset demo data).
 12. **Dispatcher.** Orders & audit → search the outlet → the order's full event log, from the
     cutoff to the receipt.
 
-`E2E_BASE_URL=<url> E2E_REAL_STACK=true pnpm e2e` runs this walkthrough in a browser
-(`e2e/tests/walkthrough.real.spec.ts`). It resets the demo data first.
+### After the plan is published
+
+- **A vehicle breaks down.** Fleet & trips → pick the vehicle → Mark unavailable. Its trips that
+  have not departed stop, and the replan page proposes a trip for each order that passes every
+  hard rule (or a deferral with the rule that blocks it). Publish sends the next plan version to
+  the loader, the affected drivers and the stores. Trips already on the road never change.
+- **One order moves or is deferred.** Fleet & trips → Change on a stop → another vehicle and trip,
+  or Defer to next run with a reason. The dispatcher's note is kept in the audit log.
+- **A store issue is resolved.** Store issues → write what was decided → Resolve issue. The store
+  manager sees the resolution on the issue and gets a notice. The driver's signature and photo
+  show beside the issue, on the store's receipt page and in Orders & audit.
+- **An empty plan cannot be published.** Review & publish stays off, and the API refuses it,
+  until orders are on trips or each one has been deferred with a reason.
+
+### Dates
+
+The supplied calendar ends on 28 June 2026. Operating days after it (Monday to Saturday) are
+generated ahead of the operating clock, so orders, planning and the demo clock keep working on
+any later date. `DEMO_DATE` can be any operating day.
+
+### Browser tests
+
+`pnpm e2e` runs the mocked specs against the dev server. With a seeded stack running,
+`E2E_BASE_URL=<url> E2E_REAL_STACK=true pnpm e2e` also runs the real-stack specs: the walkthrough
+above (`walkthrough.real.spec.ts`), the post-publish operations (`operations.real.spec.ts`) and
+the role checks (`roles.real.spec.ts`). They reset the demo data, and they sign in many times in a
+minute, so start that stack with `LOGIN_RATE_LIMIT=500`.
 
 See [the authentication audit and repair report](docs/AUTH_FLOW_REPAIR.md) for architecture, scope checks, tests, and offline limitations.
 To verify the four real accounts, run `E2E_BASE_URL=http://localhost:8080 E2E_REAL_STACK=true pnpm e2e`

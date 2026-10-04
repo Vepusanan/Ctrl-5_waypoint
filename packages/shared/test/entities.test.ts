@@ -241,8 +241,19 @@ describe('loading, store and notification records', () => {
       status: 'open',
       createdBy: ids.user,
       createdAt: colomboTime,
+      resolvedBy: null,
+      resolvedAt: null,
+      resolution: null,
     };
     expect(issueSchema.parse(issue)).toEqual(issue);
+    const resolved = {
+      ...issue,
+      status: 'resolved',
+      resolvedBy: ids.user,
+      resolvedAt: colomboTime,
+      resolution: 'Credit note raised',
+    };
+    expect(issueSchema.parse(resolved)).toEqual(resolved);
   });
 });
 

@@ -2,6 +2,7 @@ import {
   type AuditTimelineItem,
   auditTimelineSchema,
   deliveryStopSchema,
+  issueListResponseSchema,
   type Order,
   orderListResponseSchema,
   orderSchema,
@@ -14,6 +15,7 @@ import { api as http } from '../../../../lib/api';
 import { orderName } from '../../../store/shared';
 import type {
   AuditEvent,
+  issueBoardSchema,
   LifecycleStep,
   orderAuditSchema,
   orderIndexSchema,
@@ -95,6 +97,9 @@ const titles: Record<string, string> = {
   'stop.delivered': 'Delivered',
   'stop.failed': 'Delivery failed',
   'issue.reported': 'Receipt issue reported',
+  'issue.resolved': 'Receipt issue resolved',
+  'plan.replanned': 'Plan changed after publish',
+  'vehicle.unavailable': 'Vehicle marked unavailable',
   'receipt.confirmed': 'Receipt confirmed',
 };
 
@@ -104,6 +109,10 @@ const people: Record<Role, { actor: string; actorRole: string; source: AuditEven
   driver: { actor: 'Driver', actorRole: 'Driver', source: 'phone' },
   store_manager: { actor: 'Store manager', actorRole: 'Store', source: 'web' },
 };
+
+/** Where the API serves a stop's proof-of-delivery image. */
+const podUrl = (stopId: string, kind: 'signature' | 'photo') =>
+  `/api/v1/stops/${stopId}/pod/${kind}`;
 
 const text = (value: unknown) => (typeof value === 'string' && value.length > 0 ? value : null);
 
@@ -157,8 +166,9 @@ async function audit(orderId: string): Promise<z.infer<typeof orderAuditSchema>>
     pod: stop?.pod
       ? {
           recipient: stop.pod.recipientName,
-          photoUrl: null,
-          signatureUrl: null,
+          // Served from the one stored copy, and only to roles that may see this stop.
+          photoUrl: stop.pod.hasPhoto ? podUrl(stop.id, 'photo') : null,
+          signatureUrl: podUrl(stop.id, 'signature'),
           capturedAt: stop.pod.clientTime,
           capturedOffline: podLate,
           syncedAt: podLate && podRow ? podRow.createdAt : null,
@@ -175,7 +185,63 @@ async function audit(orderId: string): Promise<z.infer<typeof orderAuditSchema>>
   };
 }
 
+// Store issues: the issue list joined with its order, outlet and delivery.
+async function issueBoard(): Promise<z.infer<typeof issueBoardSchema>> {
+  const [issues, orders, names, trips] = await Promise.all([
+    http('/issues', issueListResponseSchema),
+    http('/orders', orderListResponseSchema),
+    outletNames(),
+    http('/trips', tripListResponseSchema),
+  ]);
+  const orderById = new Map(orders.items.map((order) => [order.id, order]));
+  const stops = trips.items.flatMap((trip) => trip.stops.map((stop) => ({ trip, stop })));
+  const pods = new Map<string, Awaited<ReturnType<typeof stopOf>>>();
+  const withStop = issues.items.flatMap((issue) => {
+    const found = stops.find((item) => item.stop.orderId === issue.orderId);
+    return found ? [found] : [];
+  });
+  await Promise.all(
+    [...new Set(withStop.map((item) => item.stop.id))].map(async (id) => {
+      pods.set(id, await stopOf(id));
+    }),
+  );
+  const items = issues.items.map((issue) => {
+    const order = orderById.get(issue.orderId);
+    const found = stops.find((item) => item.stop.orderId === issue.orderId);
+    const pod = found ? (pods.get(found.stop.id)?.pod ?? null) : null;
+    return {
+      id: issue.id,
+      orderId: issue.orderId,
+      reference: orderName(issue.orderId),
+      outlet: {
+        code: order?.outletId ?? 'Outlet',
+        name: (order && names.get(order.outletId)) ?? order?.brand ?? 'Outlet',
+      },
+      type: issue.type,
+      note: issue.note,
+      status: issue.status,
+      reportedAt: issue.createdAt,
+      resolvedAt: issue.resolvedAt,
+      resolution: issue.resolution,
+      delivery: found
+        ? {
+            vehicleId: found.trip.vehicleId,
+            tripNo: found.trip.tripNo,
+            recipient: pod?.recipientName ?? null,
+            signatureUrl: pod ? podUrl(found.stop.id, 'signature') : null,
+            photoUrl: pod?.hasPhoto ? podUrl(found.stop.id, 'photo') : null,
+          }
+        : null,
+    };
+  });
+  return { items, total: items.length };
+}
+
+/** A stop's delivery record, or null when it cannot be read. */
+const stopOf = (stopId: string) => http(`/stops/${stopId}`, deliveryStopSchema).catch(() => null);
+
 export const orderSources: readonly Source[] = [
+  ['GET', '/issues/board', () => issueBoard()],
   ['GET', '/orders', ({ query }) => index(query)],
   ['GET', '/orders/:id/audit', ({ params }) => audit(params.id ?? '')],
 ];

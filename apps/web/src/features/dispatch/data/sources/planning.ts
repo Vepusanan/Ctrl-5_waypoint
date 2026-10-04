@@ -473,6 +473,7 @@ async function inspector(
       });
       return {
         tripNo: slot.tripNo,
+        ...(trip && snapshot.published ? { status: trip.status } : {}),
         loadKg: Math.round(load.kg),
         loadM3: Math.round(load.m3 * 10) / 10,
         stops: slot.orderIds.map((orderId) => {
@@ -504,6 +505,8 @@ async function inspector(
         fix: null,
       };
     }),
+    published: snapshot.published,
+    unavailable: vehicle.availability?.status === 'in_workshop',
   };
 }
 
@@ -816,6 +819,20 @@ async function review(date: string): Promise<z.infer<typeof planReviewSchema>> {
         detail:
           snapshot.inputError ??
           (hard ? `${hard} hard violations block publishing` : 'No trip breaks a hard rule'),
+      },
+      // The server refuses an empty plan too: it would defer the whole run without a decision.
+      {
+        key: 'trips',
+        state: used.length > 0 ? 'pass' : waiting > 0 || deferred === 0 ? 'fail' : 'warn',
+        title: 'Orders on trips',
+        detail:
+          used.length > 0
+            ? `${used.length} ${used.length === 1 ? 'trip carries' : 'trips carry'} orders`
+            : waiting > 0
+              ? `No order is on a trip. Publishing would defer all ${waiting}. Allocate them, or defer each one with a reason.`
+              : deferred > 0
+                ? 'Every order was deferred with a reason. Publishing sends the deferral notices only.'
+                : 'There are no orders or deferrals to publish.',
       },
       {
         key: 'unallocated',

@@ -964,3 +964,11 @@
   color: var(--color-status-danger);
   font-size: var(--text-small);
 }
+
+/* Two controls side by side in an overlay, stacked when the sheet is narrow. */
+.d-inline-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}

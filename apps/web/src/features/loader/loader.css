@@ -1588,6 +1588,8 @@
   flex: none;
   align-items: center;
   gap: var(--space-8);
+  /* A shared-tablet target: 48px tall, like every other loader control. */
+  min-height: 48px;
   padding: 10px var(--space-16);
   border: 0;
   border-radius: var(--radius-pill);

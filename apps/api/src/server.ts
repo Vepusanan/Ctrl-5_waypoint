@@ -16,6 +16,7 @@ const app = await buildApp({
   sessionSecret: env.SESSION_SECRET,
   secureCookies: secureSessionCookies(env, process.env.NODE_ENV === 'production'),
   demoMode: env.DEMO_MODE,
+  ...(env.LOGIN_RATE_LIMIT !== undefined ? { loginLimit: env.LOGIN_RATE_LIMIT } : {}),
   ...(seedEnv === undefined
     ? {}
     : {
@@ -34,6 +35,18 @@ if (env.DEMO_MODE) {
   if (start === null) app.log.warn('demo_clock.unseeded');
   else app.log.info({ now: start }, 'demo_clock.pinned');
 }
+
+// Keep operating days generated ahead of the clock. A failure here must not stop the API: the
+// calendar already covers the horizon from the last run.
+const CALENDAR_CHECK_MS = 6 * 60 * 60 * 1000;
+const extendCalendar = () =>
+  app.ensureCalendar().catch((error: unknown) => {
+    app.log.error({ err: error }, 'calendar.extend_failed');
+  });
+await extendCalendar();
+const calendarTimer = setInterval(extendCalendar, CALENDAR_CHECK_MS);
+calendarTimer.unref();
+app.addHook('onClose', async () => clearInterval(calendarTimer));
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {

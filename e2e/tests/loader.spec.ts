@@ -6,6 +6,7 @@ const stop = (n: number): LoadingStop => ({
   id: uid(n + 10),
   seq: n,
   plannedArrival: `2026-10-08T0${n + 6}:00:00+05:30`,
+  loadedUnits: 0,
   chilled: n === 1,
   access: n === 1 ? 'van_only' : 'normal',
   order: {
@@ -27,6 +28,8 @@ test('tablet loading journey, stale plan gate and Dispatcher acknowledgement', a
   await page.setViewportSize({ width: 1180, height: 820 });
   const capture = async (screen: string) => {
     await page.evaluate(() => document.fonts.ready);
+    // Icons are separate files; measure them once they have all arrived.
+    await page.waitForFunction(() => [...document.images].every((image) => image.complete));
     const smallTargets = await page
       .locator('button:visible, a:visible, select:visible, input:visible, textarea:visible')
       .evaluateAll((nodes) =>
@@ -127,6 +130,16 @@ test('tablet loading journey, stale plan gate and Dispatcher acknowledgement', a
     else if (url.pathname.endsWith('/notifications') || url.pathname.endsWith('/outlets'))
       body = { total: 0, items: [] };
     else if (url.pathname.includes('/loading')) {
+      // The loader's count is kept by the server, so it survives the reloads below.
+      if (route.request().method() === 'PUT') {
+        const { orderId, units } = route.request().postDataJSON();
+        state = {
+          ...state,
+          stops: state.stops.map((item) =>
+            item.order.id === orderId ? { ...item, loadedUnits: units } : item,
+          ),
+        };
+      }
       if (route.request().method() === 'POST') {
         const action = url.pathname.split('/').pop() ?? '';
         calls.push(action);
@@ -225,6 +238,7 @@ test('tablet loading journey, stale plan gate and Dispatcher acknowledgement', a
       { ...stop(2), seq: 1 },
     ],
   };
+  // Start the recount from zero, as a reordered load is counted again.
   await page.reload();
   await expect(page.getByText('OUT001: stop 1 → 2', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mark Ready' })).toHaveCount(0);

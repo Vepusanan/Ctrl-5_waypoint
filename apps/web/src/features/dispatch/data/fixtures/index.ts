@@ -1,6 +1,6 @@
 /** Dispatcher fixtures. Values are copied from Figma section A so pages can be compared 1:1. */
 import type { z } from 'zod';
-import type { CommandCenter, DispatchRun, operationsSchema, SavedView } from '../../contracts';
+import type { CommandCenter, DispatchRun, operationsSchema } from '../../contracts';
 import { analyticsRoutes } from './analytics';
 import { auditRoutes } from './audit';
 import { deferralRoutes } from './deferrals';
@@ -11,7 +11,7 @@ import { outletRoutes } from './outlets';
 import { planningRoutes } from './planning';
 import { recordRoutes } from './record';
 import { replanRoutes } from './replan';
-import { createMockFetch, fail, hasRoute, type MockRoute } from './router';
+import { createMockFetch, hasRoute, type MockRoute } from './router';
 import { SERVICE_DATE, scenarioNow } from './session';
 import { report } from './validation';
 
@@ -158,37 +158,7 @@ const commandCenter = (): CommandCenter => ({
   ],
 });
 
-let savedViews: SavedView[] = [
-  {
-    id: 'view-1',
-    name: 'Repeat deferrals',
-    audience: 'team',
-    pinned: true,
-    filters: { tag: 'repeat_deferral' },
-  },
-  {
-    id: 'view-2',
-    name: 'Chilled unallocated',
-    audience: 'private',
-    pinned: true,
-    filters: { temp: 'chilled', state: 'unallocated' },
-  },
-  {
-    id: 'view-3',
-    name: 'Van-only outlets',
-    audience: 'team',
-    pinned: true,
-    filters: { tag: 'van_only' },
-  },
-  {
-    id: 'view-4',
-    name: 'Mall windows tomorrow',
-    audience: 'team',
-    pinned: true,
-    filters: { tag: 'mall_window' },
-  },
-];
-let nextViewId = 5;
+// Saved queue views are stored on the server (`/planning/views`), so they have no fixture.
 
 const dispatchRoutes: MockRoute[] = [
   ...planningRoutes,
@@ -212,44 +182,6 @@ const dispatchRoutes: MockRoute[] = [
       items: state.orders,
       total: state.orders.length,
     })),
-  ],
-  ['GET', '/planning/views', dispatcher(() => ({ items: savedViews, total: savedViews.length }))],
-  [
-    'POST',
-    '/planning/views',
-    dispatcher(({ body }) => {
-      const view = { ...(body as Omit<SavedView, 'id'>), id: `view-${nextViewId++}` };
-      savedViews = [...savedViews, view];
-      return view;
-    }),
-  ],
-  [
-    'PATCH',
-    '/planning/views/:id',
-    dispatcher(({ params, body }) => {
-      const current = savedViews.find((view) => view.id === params.id);
-      if (!current) return fail(404, 'NOT_FOUND', 'That view no longer exists.');
-      const updated = { ...current, ...(body as Partial<SavedView>), id: current.id };
-      savedViews = savedViews.map((view) => (view.id === current.id ? updated : view));
-      return updated;
-    }),
-  ],
-  [
-    'DELETE',
-    '/planning/views/:id',
-    dispatcher(({ params }) => {
-      savedViews = savedViews.filter((view) => view.id !== params.id);
-      return undefined;
-    }),
-  ],
-  [
-    'PUT',
-    '/planning/views/order',
-    dispatcher(({ body }) => {
-      const { ids } = body as { ids: string[] };
-      savedViews = [...savedViews].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-      return { items: savedViews, total: savedViews.length };
-    }),
   ],
 ];
 

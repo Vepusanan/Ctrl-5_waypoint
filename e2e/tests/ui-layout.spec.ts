@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 const date = '2026-10-05';
+// Desktop, laptop, tablet, phone and a small phone.
+const WIDTHS = [1440, 1024, 768, 390, 320];
 const user = {
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Nirosha Fernando',
@@ -143,28 +145,37 @@ test('sign-in and dispatcher layouts fit desktop, tablet and phone; login and qu
   );
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
-  for (const width of [1440, 1024, 390, 320]) {
+  for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1024 });
     await capture(`login-${width}`);
   }
+  await page.setViewportSize({ width: 1440, height: 1024 });
   await page.getByLabel('Email', { exact: true }).fill(user.email);
   await page.getByLabel('Password').fill('test-password');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Operations command center' })).toBeVisible();
-  await expect(
-    page.getByRole('list', { name: 'Orders awaiting planning by district' }),
-  ).toContainText('Colombo');
-  for (const width of [1440, 1024, 390, 320]) {
+  await expect(page.getByRole('heading', { name: 'Command center', level: 1 })).toBeVisible();
+  // The four confirmed orders are counted and broken down by district.
+  await expect(page.getByText('Orders in tonight’s run')).toBeVisible();
+  await expect(page.locator('main').getByText('Colombo').first()).toBeVisible();
+  for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1024 });
     await capture(`dashboard-${width}`);
   }
-  await page.getByRole('link', { name: 'Open planning queue' }).click();
+  await page.setViewportSize({ width: 1440, height: 1024 });
+  await page.getByRole('link', { name: 'Open queue' }).click();
   await expect(page.getByRole('heading', { name: 'Planning queue', exact: true })).toBeVisible();
-  for (const width of [1440, 1024, 390, 320]) {
+  await expect(page.getByRole('table').getByText('OUT003')).toBeVisible();
+  for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1024 });
     await capture(`queue-${width}`);
   }
-  await page.getByRole('combobox', { name: /^District/ }).selectOption('Kandy');
+  // Searching narrows the one queue; the login, dashboard and queue share the same orders.
+  await page.setViewportSize({ width: 1440, height: 1024 });
+  await page
+    .getByRole('button', { name: /^Search/ })
+    .last()
+    .click();
+  await page.getByRole('searchbox', { name: 'Search the queue' }).fill('OUT003');
   await expect(page.getByRole('table').getByText('OUT003')).toBeVisible();
   await expect(page.getByRole('table').getByText('OUT001')).toHaveCount(0);
   expect(errors).toEqual([]);
@@ -203,16 +214,21 @@ test('store home and order entry fit desktop, tablet and phone without changing 
   };
   await page.goto('/store');
   await expect(page.getByRole('heading', { name: /Good morning/ })).toBeVisible();
-  for (const width of [1440, 1024, 390, 320]) {
+  for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1024 });
     await capture(`store-${width}`);
   }
+  await page.setViewportSize({ width: 1440, height: 1024 });
   await page.goto('/store/orders/new');
-  await page.getByLabel('Chilled units', { exact: true }).fill('12');
-  for (const width of [1440, 1024, 390, 320]) {
+  const more = page.getByRole('button', { name: /^More: / }).first();
+  for (let count = 0; count < 3; count += 1) await more.click();
+  // The quantity entered at one width is still there at every other width.
+  const quantity = page.locator('.st-stepper input').first();
+  for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1024 });
     await capture(`order-${width}`);
-    await expect(page.getByLabel('Chilled units', { exact: true })).toHaveValue('12');
+    await expect(quantity).toHaveValue('3');
+    await expect(page.getByRole('button', { name: /^Submit/ }).first()).toBeVisible();
   }
   expect(errors).toEqual([]);
 });

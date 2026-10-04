@@ -28,6 +28,7 @@ const title: Record<NotificationType, string> = {
   delivered: 'Delivered',
   receipt_discrepancy: 'Receipt discrepancy',
   sync_conflict: 'Sync conflict',
+  issue_resolved: 'Store issue resolved',
 };
 
 const tone: Record<NotificationPriority, 'danger' | 'warning' | 'neutral'> = {

@@ -236,6 +236,9 @@ const issues: Issue[] = [
     status: 'open',
     createdBy: 'planning',
     createdAt: at('2026-09-24', '04:24'),
+    resolvedBy: null,
+    resolvedAt: null,
+    resolution: null,
   },
   {
     id: 'ISS-0418',
@@ -245,6 +248,9 @@ const issues: Issue[] = [
     status: 'resolved',
     createdBy: USER,
     createdAt: at('2026-09-22', '06:20'),
+    resolvedBy: 'planning',
+    resolvedAt: at('2026-09-22', '09:10'),
+    resolution: 'Credit note raised for the damaged tray',
   },
   {
     id: 'ISS-0407',
@@ -254,6 +260,9 @@ const issues: Issue[] = [
     status: 'resolved',
     createdBy: USER,
     createdAt: at('2026-09-19', '06:41'),
+    resolvedBy: 'planning',
+    resolvedAt: at('2026-09-19', '10:05'),
+    resolution: 'Correct SKU sent on the next run',
   },
 ];
 

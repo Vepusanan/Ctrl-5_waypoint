@@ -24,6 +24,7 @@ import {
   draftPlanResponseSchema,
   planningQueueResponseSchema,
   publishPlanResponseSchema,
+  replanProposalSchema,
   simulatePlanResponseSchema,
   type User,
 } from '@waypoint/shared';
@@ -763,6 +764,160 @@ describe('planning', () => {
     expect([...servedIds, ...deferredIds].sort()).toEqual([served, deferred].sort());
     const reasons = await database.db.select({ orderId: deferrals.orderId }).from(deferrals);
     expect(reasons.map((row) => row.orderId)).toEqual(deferredIds);
+  });
+
+  it('refuses to publish a plan with no trips', async () => {
+    const order = await insertOrder();
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/publish`,
+      headers: { cookie: dispatcher.cookie, 'if-match': '0' },
+    });
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({
+      error: { code: 'CONSTRAINT_VIOLATION', message: expect.stringContaining('no trips') },
+    });
+    const stored = await database.db.select().from(orders).where(eq(orders.id, order));
+    expect(stored[0]?.status).toBe('confirmed');
+    expect(await database.db.select().from(deferrals)).toEqual([]);
+    // The refused publish rolls back, so no run is left published.
+    const runs = await database.db.select().from(planningRuns);
+    expect(runs.every((run) => run.status === 'open')).toBe(true);
+  });
+
+  it('replans a published run when its vehicle is lost', async () => {
+    const { served } = await publishDay();
+    const before = await database.db.select().from(trips);
+    const lost = before[0]?.vehicleId ?? '';
+    expect(before).toHaveLength(1);
+
+    const forbidden = await app.inject({
+      method: 'POST',
+      url: `/api/v1/vehicles/${lost}/unavailable`,
+      headers: { cookie: loaderCookie },
+      payload: { date: SERVICE_DATE },
+    });
+    expect(forbidden.statusCode).toBe(403);
+    const marked = await app.inject({
+      method: 'POST',
+      url: `/api/v1/vehicles/${lost}/unavailable`,
+      headers: { cookie: dispatcher.cookie },
+      payload: { date: SERVICE_DATE, reason: 'Brake failure' },
+    });
+    expect(marked.statusCode).toBe(200);
+    expect(marked.json()).toMatchObject({ vehicleId: lost, affectedOrderIds: [served] });
+    expect((await database.db.select().from(trips))[0]?.status).toBe('blocked');
+
+    const proposal = await app.inject({
+      method: 'GET',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/replans/${lost}`,
+      headers: { cookie: dispatcher.cookie },
+    });
+    expect(proposal.statusCode).toBe(200);
+    const plan = replanProposalSchema.parse(proposal.json());
+    expect(plan.reason).toBe('Brake failure');
+    expect(plan.feasible).toBe(true);
+    const target = plan.orders[0]?.target;
+    expect(plan.orders[0]?.orderId).toBe(served);
+    expect(target?.vehicleId).not.toBe(lost);
+    if (!target) throw new Error('Expected a replan target');
+
+    const payload = {
+      note: `${lost} unavailable`,
+      moves: [{ orderId: served, target: { vehicleId: target.vehicleId, tripNo: target.tripNo } }],
+    };
+    const stale = await app.inject({
+      method: 'POST',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/replan`,
+      headers: { cookie: dispatcher.cookie, 'if-match': '0' },
+      payload,
+    });
+    expect(stale.statusCode).toBe(409);
+    const applied = await app.inject({
+      method: 'POST',
+      url: `/api/v1/planning/runs/${SERVICE_DATE}/replan`,
+      headers: { cookie: dispatcher.cookie, 'if-match': String(plan.planVersion) },
+      payload,
+    });
+    expect(applied.statusCode).toBe(200);
+    expect(applied.json()).toMatchObject({
+      planVersion: plan.planVersion + 1,
+      movedOrderIds: [served],
+      deferredOrderIds: [],
+    });
+
+    const after = await database.db.select().from(trips);
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ vehicleId: target.vehicleId, status: 'published' });
+    const stops = await database.db.select().from(tripStops);
+    expect(stops).toHaveLength(1);
+    expect(stops[0]).toMatchObject({ orderId: served, tripId: after[0]?.id, seq: 1 });
+    const fuel = await database.db.select().from(fuelLedger);
+    expect(fuel.map((row) => row.tripId)).toEqual([after[0]?.id]);
+    const stored = await database.db.select().from(orders).where(eq(orders.id, served));
+    expect(stored[0]?.status).toBe('allocated');
+    const audit = await database.db.select().from(auditLog);
+    expect(audit.map((row) => row.action)).toEqual(
+      expect.arrayContaining(['vehicle.unavailable', 'plan.replanned']),
+    );
+    const notes = await database.db.select().from(notifications);
+    expect(notes.some((note) => note.type === 'plan_changed')).toBe(true);
+  });
+
+  it('defers a published order with a reason and leaves departed trips alone', async () => {
+    const { served, published } = await publishDay();
+    const replan = (payload: Record<string, unknown>, version: number) =>
+      app.inject({
+        method: 'POST',
+        url: `/api/v1/planning/runs/${SERVICE_DATE}/replan`,
+        headers: { cookie: dispatcher.cookie, 'if-match': String(version) },
+        payload,
+      });
+    const [trip] = await database.db.select().from(trips);
+    if (!trip) throw new Error('Expected a published trip');
+
+    const unreasoned = await replan(
+      { note: 'Store asked to skip', moves: [{ orderId: served, target: null }] },
+      published.planVersion,
+    );
+    expect(unreasoned.statusCode).toBe(400);
+
+    const defer = {
+      note: 'Store asked to skip',
+      moves: [{ orderId: served, target: null, reasonCode: 'VOLUME_CAP' }],
+    };
+    await database.db.update(trips).set({ status: 'departed' }).where(eq(trips.id, trip.id));
+    const departed = await replan(defer, published.planVersion);
+    expect(departed.statusCode).toBe(422);
+    expect(await database.db.select().from(tripStops)).toHaveLength(1);
+    await database.db.update(trips).set({ status: 'published' }).where(eq(trips.id, trip.id));
+
+    const deferred = await replan(defer, published.planVersion);
+    expect(deferred.statusCode).toBe(200);
+    expect(deferred.json()).toMatchObject({ deferredOrderIds: [served], movedOrderIds: [] });
+    expect((await database.db.select().from(orders).where(eq(orders.id, served)))[0]?.status).toBe(
+      'deferred',
+    );
+    expect(await database.db.select().from(tripStops)).toEqual([]);
+    expect(await database.db.select().from(trips)).toEqual([]);
+    const reasons = await database.db.select().from(deferrals).where(eq(deferrals.orderId, served));
+    expect(reasons[0]).toMatchObject({ reasonCode: 'VOLUME_CAP', note: 'Store asked to skip' });
+
+    // The same run can take the order back while it has not left.
+    const back = await replan(
+      {
+        note: 'Store can take it after all',
+        moves: [{ orderId: served, target: { vehicleId: trip.vehicleId, tripNo: 1 } }],
+      },
+      published.planVersion + 1,
+    );
+    expect(back.statusCode).toBe(200);
+    expect((await database.db.select().from(orders).where(eq(orders.id, served)))[0]?.status).toBe(
+      'allocated',
+    );
+    const rebuilt = await database.db.select().from(trips);
+    expect(rebuilt).toHaveLength(1);
+    expect(rebuilt[0]).toMatchObject({ vehicleId: trip.vehicleId, status: 'published' });
   });
 
   it('writes audit events for allocation and publish', async () => {

@@ -163,6 +163,9 @@ export const storeApi = {
       status: 'open',
       createdBy: 'fixture-store-manager',
       createdAt: stamp(fixtureNow()),
+      resolvedBy: null,
+      resolvedAt: null,
+      resolution: null,
     };
     fx.workspace.issues.unshift(issue);
     fx.details[body.orderId]?.issues.unshift(issue);
@@ -315,6 +318,7 @@ const noteCopy: Record<NotificationType, [title: string, detail: string]> = {
   delivered: ['Delivery completed', 'Awaiting your receipt confirmation'],
   receipt_discrepancy: ['Receipt issue sent to planning', 'Planning decides the fix'],
   sync_conflict: ['A field update needs review', 'Planning is checking the record'],
+  issue_resolved: ['Issue resolved by planning', 'Open Issues to read what was decided'],
 };
 
 export const insights = {
@@ -403,7 +407,12 @@ export const insights = {
       short,
       unit: 'cartons',
       fix: resolved
-        ? { title: 'Closed by planning', detail: 'Nothing else for you to do', status: 'Done' }
+        ? {
+            title: 'Resolved by planning',
+            // What the dispatcher wrote when closing the issue.
+            detail: issue.resolution ?? 'Nothing else for you to do',
+            status: 'Done',
+          }
         : {
             title: 'With planning',
             detail: `Dispatcher alerted ${clock(issue.createdAt)} · no action needed from you`,
@@ -412,8 +421,8 @@ export const insights = {
       timeline: [
         { at: issue.createdAt, text: 'Issue sent · dispatcher alerted', done: true },
         {
-          at: null,
-          text: resolved ? 'Closed by planning' : 'Planning decides the fix',
+          at: issue.resolvedAt,
+          text: resolved ? 'Resolved by planning' : 'Planning decides the fix',
           done: resolved,
         },
       ],
@@ -436,6 +445,15 @@ export const insights = {
       .sort((a, b) => a.order.requestedDate.localeCompare(b.order.requestedDate))
       .slice(-4)
       .map((item) => item.order.status === 'deferred');
+  },
+  /**
+   * Where the driver's signature or photo for a stop is served. The API checks that the stop
+   * delivered to this outlet. The Figma scenario has no stored image, so it shows the mark.
+   */
+  podImage(stopId: string, kind: 'signature' | 'photo'): string | null {
+    if (fixtureMode)
+      return kind === 'signature' ? '/waypoint/store/2179-26669-imgVector.svg' : null;
+    return `/api/v1/stops/${stopId}/pod/${kind}`;
   },
   /** Gap: the API has no planning desk number, so "Call planning" has nothing to dial live. */
   planningPhone: (): string | null => (fixtureMode ? fixtures.planningPhone : null),

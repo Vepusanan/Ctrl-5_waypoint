@@ -294,6 +294,10 @@ function orderStory(orderId: string): SQL {
       ${auditLog.after} -> 'servedOrderIds' ? ${orderId}
       or ${auditLog.after} -> 'deferredOrderIds' ? ${orderId}
     ))
+    or (${auditLog.action} = 'plan.replanned' and (
+      ${auditLog.after} -> 'movedOrderIds' ? ${orderId}
+      or ${auditLog.after} -> 'deferredOrderIds' ? ${orderId}
+    ))
   )`;
 }
 

@@ -20,6 +20,7 @@ const look: Record<NotificationType, [icon: string, tone: WellTone]> = {
   delivered: ['boxc', 'success'],
   receipt_discrepancy: ['alert', 'warning'],
   sync_conflict: ['clock', 'warning'],
+  issue_resolved: ['check', 'success'],
 };
 
 /** Where a notice leads: the order's notice, receipt, confirmation or tracking page. */

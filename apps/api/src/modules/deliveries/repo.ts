@@ -115,6 +115,13 @@ export interface DeliveryRepo {
   /** Departed -> completed once no stop on the trip is still pending or arrived. */
   completeTripIfDone(db: DeliveryDb, tripId: string): Promise<boolean>;
   findPod(db: DeliveryDb, stopId: string): Promise<PodRow | null>;
+  /** The stored image for a stop the caller may see. `access` scopes the stop. */
+  findPodImage(
+    db: DeliveryDb,
+    access: SQL,
+    stopId: string,
+    kind: 'signature' | 'photo',
+  ): Promise<{ found: boolean; image: Buffer | null }>;
   failureReason(db: DeliveryDb, stopId: string): Promise<string | null>;
   insertPod(db: DeliveryDb, row: InsertPod): Promise<PodRow>;
   listDispatchers(db: DeliveryDb, depotId: string): Promise<{ id: string }[]>;
@@ -236,6 +243,19 @@ export function createDeliveryRepo(): DeliveryRepo {
         .where(and(eq(orders.id, orderId), eq(orders.status, 'dispatched')))
         .returning({ id: orders.id });
       return rows.length === 1;
+    },
+
+    async findPodImage(db, access, stopId, kind) {
+      const rows = await db
+        .select({ image: kind === 'signature' ? pods.signature : pods.photo })
+        .from(pods)
+        .innerJoin(tripStops, eq(tripStops.id, pods.stopId))
+        .innerJoin(trips, eq(trips.id, tripStops.tripId))
+        .innerJoin(orders, eq(orders.id, tripStops.orderId))
+        .where(and(eq(pods.stopId, stopId), access))
+        .limit(1);
+      const row = rows[0];
+      return row === undefined ? { found: false, image: null } : { found: true, image: row.image };
     },
 
     async completeTripIfDone(db, tripId) {

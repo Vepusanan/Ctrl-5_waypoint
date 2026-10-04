@@ -126,7 +126,8 @@ export function LoadDetail() {
       </>
     );
   }
-  // Counts are cleared when the trip version changes, as the plan they were made against is gone.
+  // Unsaved taps are dropped when the trip version changes. Counts already saved stay with their
+  // orders, and verification checks them against the new plan.
   return (
     <Flow
       key={`${tripId}:${loading.data.tripVersion}`}
@@ -163,6 +164,22 @@ function Flow({
     },
   });
   const tripId = detail.id;
+  const saveCount = useMutation({
+    mutationFn: ({ stop, units }: { stop: LoadingStop; units: number }) =>
+      api(`/trips/${detail.id}/loading/counts`, loadingStateSchema, {
+        method: 'PUT',
+        body: JSON.stringify({ orderId: stop.order.id, units }),
+      }),
+    // A count the server refused is dropped, and the screen returns to what is saved.
+    onError: (_cause, { stop }) => {
+      setCounts((current) => {
+        const next = new Map(current);
+        next.delete(stop.id);
+        return next;
+      });
+      void refresh();
+    },
+  });
   const ifMatch = { 'If-Match': String(state.tripVersion) };
   const post = (path: string, onDone?: () => void) =>
     action.mutate(
@@ -171,8 +188,12 @@ function Flow({
     );
   const reversed = [...state.stops].sort((left, right) => right.seq - left.seq);
   const loadedAll = state.status === 'ready' || state.status === 'departed';
+  // The server keeps the count, so a refresh, another tablet or the next loader sees it. The
+  // local value only covers the moment between a tap and the server's answer.
   const counted = (stop: LoadingStop) =>
-    loadedAll ? stop.order.units : Math.min(stop.order.units, counts.get(stop.id) ?? 0);
+    loadedAll
+      ? stop.loadedUnits || stop.order.units
+      : Math.min(stop.order.units, counts.get(stop.id) ?? stop.loadedUnits);
   const reported = (stop: LoadingStop) =>
     state.issues
       .filter((issue) => issue.orderId === stop.order.id)
@@ -190,10 +211,11 @@ function Flow({
     counted,
     reported,
     complete,
-    setCount: (stop, count) =>
-      setCounts((current) =>
-        new Map(current).set(stop.id, Math.max(0, Math.min(stop.order.units, count))),
-      ),
+    setCount: (stop, count) => {
+      const units = Math.max(0, Math.min(stop.order.units, count));
+      setCounts((current) => new Map(current).set(stop.id, units));
+      saveCount.mutate({ stop, units });
+    },
     loaded,
     total,
     allLoaded: reversed.every(complete),

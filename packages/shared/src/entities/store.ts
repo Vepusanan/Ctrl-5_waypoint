@@ -18,5 +18,9 @@ export const issueSchema = z.object({
   status: issueStatusSchema,
   createdBy: uuidSchema,
   createdAt: timestampSchema,
+  // Null until the dispatcher resolves the issue.
+  resolvedBy: uuidSchema.nullable(),
+  resolvedAt: timestampSchema.nullable(),
+  resolution: z.string().trim().min(1).nullable(),
 });
 export type Issue = z.infer<typeof issueSchema>;

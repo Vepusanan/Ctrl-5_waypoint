@@ -164,8 +164,10 @@ export function Bars({
   const dim = bars.some((bar) => bar.highlight);
   return (
     <ol className="d-bars" aria-label={label} style={{ height }}>
-      {bars.map((bar) => (
-        <li key={bar.name}>
+      {bars.map((bar, index) => (
+        // One outlet can have two stops on a trip (dry and chilled), so the name alone repeats.
+        // biome-ignore lint/suspicious/noArrayIndexKey: the list is rebuilt whole and never reordered
+        <li key={`${bar.name}-${index}`}>
           <span className="d-bar-value">{bar.display ?? bar.value}</span>
           <span
             className="d-bar"

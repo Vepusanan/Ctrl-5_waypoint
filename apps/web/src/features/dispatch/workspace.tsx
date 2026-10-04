@@ -32,6 +32,7 @@ import { setDispatchSession } from './data/context';
 import { DeferralCenter } from './deferrals';
 import { DemoClock } from './demo-clock';
 import { FleetTrips } from './fleet';
+import { StoreIssues } from './issues';
 import { LiveOperations } from './live';
 import { LoadingExceptionPage } from './live-exception';
 import { DispatchNotifications, useDispatchNotifications } from './notifications';
@@ -66,6 +67,14 @@ interface DispatchContextValue {
 }
 
 const DispatchContext = createContext<DispatchContextValue | null>(null);
+
+const DATES_BEHIND = 21;
+const DATES_AHEAD = 45;
+const shiftDays = (date: string, days: number) => {
+  const at = new Date(`${date}T12:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + days);
+  return at.toISOString().slice(0, 10);
+};
 
 export function useDispatch() {
   const value = useContext(DispatchContext);
@@ -110,6 +119,7 @@ const navigation = [
       { label: 'Fleet & trips', path: '/dispatcher/fleet', icon: 'Truck' },
       { label: 'Outlets', path: '/dispatcher/outlets', icon: 'Store' },
       { label: 'Orders & audit', path: '/dispatcher/orders', icon: 'File' },
+      { label: 'Store issues', path: '/dispatcher/issues', icon: 'Cc' },
     ],
   },
 ] as const satisfies readonly {
@@ -154,7 +164,7 @@ export function DispatchWorkspaceApp({ user }: { user: Dispatcher }) {
     queryFn: operatingToday,
     retry: false,
   });
-  const dates = useMemo(
+  const allDates = useMemo(
     () =>
       (calendar.data?.items ?? [])
         .filter((day) => day.isOperating)
@@ -166,8 +176,18 @@ export function DispatchWorkspaceApp({ user }: { user: Dispatcher }) {
   const requested = params.get('date');
   // Default to the next run after the operating clock's day, as the store does.
   const today = operating.data?.today;
-  const nextRun = today ? dates.find((day) => day > today) : undefined;
-  const date = requested && dates.includes(requested) ? requested : (nextRun ?? dates.at(-1) ?? '');
+  // Until the operating clock answers, the device date stands in. The calendar is generated
+  // well ahead, so its last day is never the right default.
+  const anchor = today ?? new Date().toISOString().slice(0, 10);
+  const nextRun = allDates.find((day) => day > anchor);
+  const date =
+    requested && allDates.includes(requested) ? requested : (nextRun ?? allDates.at(-1) ?? '');
+  // The date picker offers the weeks around the operating day, not the whole calendar.
+  const dates = useMemo(() => {
+    const from = shiftDays(anchor, -DATES_BEHIND);
+    const to = shiftDays(anchor, DATES_AHEAD);
+    return allDates.filter((day) => (day >= from && day <= to) || day === date);
+  }, [allDates, anchor, date]);
   // Sources and fixtures read the signed-in dispatcher and the operating clock from here.
   setDispatchSession({
     name: user.name,
@@ -342,6 +362,7 @@ export function DispatchWorkspaceApp({ user }: { user: Dispatcher }) {
                 <Route path="analytics" element={<AnalyticsForecast />} />
                 <Route path="outlets" element={<OutletsPage />} />
                 <Route path="orders" element={<OrdersAudit />} />
+                <Route path="issues" element={<StoreIssues />} />
                 <Route path="notifications" element={<Notifications user={user} />} />
                 <Route path="*" element={<Navigate to={`/dispatcher?date=${date}`} replace />} />
               </Route>

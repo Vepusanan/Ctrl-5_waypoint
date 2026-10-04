@@ -18,6 +18,7 @@ import {
 import { clock } from '../../lib/format';
 import { fleetListSchema, vehicleInspectorSchema } from './contracts';
 import { api, message, noContent } from './data/client';
+import { ChangeStop, MarkUnavailable } from './replan-controls';
 import { Bars, CapacityRows, CardHead, capacityTone, DarkCard, Headline } from './ui';
 import { Page, useDispatch } from './workspace';
 import './fleet.css';
@@ -29,6 +30,8 @@ const metrics = [
 type Metric = (typeof metrics)[number]['value'];
 
 const number = (value: number) => value.toLocaleString('en-GB');
+/** Trip states in which the orders are still at the depot. */
+const OPEN_TRIPS = ['published', 'loading', 'blocked'];
 
 export function FleetTrips() {
   const { date } = useDispatch();
@@ -37,6 +40,8 @@ export function FleetTrips() {
   const [query, setQuery] = useSearchParams();
   const [metric, setMetric] = useState<Metric>('weight');
   const [why, setWhy] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const [changing, setChanging] = useState<{ orderId: string; name: string } | null>(null);
 
   const fleet = useQuery({
     queryKey: ['planning', date, 'vehicles'],
@@ -90,7 +95,7 @@ export function FleetTrips() {
     );
   }
 
-  const { vehicle, fuel, trips } = inspector.data;
+  const { vehicle, fuel, trips, published = false, unavailable = false } = inspector.data;
   const worst = [...trips].sort(
     (a, b) =>
       Math.max(...b.capacity.map((row) => row.percent)) -
@@ -150,9 +155,33 @@ export function FleetTrips() {
           <Button asChild variant="secondary" size="md">
             <Link to={`/dispatcher/orders?date=${date}&vehicle=${vehicle.id}`}>Audit trail</Link>
           </Button>
+          {unavailable ? (
+            <Button asChild size="md">
+              <Link to={`/dispatcher/vehicles/${vehicle.id}/replan?date=${date}`}>Open replan</Link>
+            </Button>
+          ) : (
+            <Button variant="secondary" size="md" onClick={() => setMarking(true)}>
+              Mark unavailable
+            </Button>
+          )}
         </>
       }
     >
+      <MarkUnavailable vehicleId={vehicle.id} open={marking} onClose={() => setMarking(false)} />
+      {trip && (
+        <ChangeStop
+          stop={changing}
+          from={{ vehicleId: vehicle.id, tripNo: trip.tripNo }}
+          vehicles={fleet.data.items}
+          onClose={() => setChanging(null)}
+        />
+      )}
+      {unavailable && (
+        <Banner tone="warning" title={`${vehicle.id} is unavailable on this date`}>
+          Its trips that had not departed are stopped. Open the replan to give their orders a new
+          trip.
+        </Banner>
+      )}
       {apply.isError && (
         <Banner tone="danger" title="The fix was not applied">
           {message(apply.error)}
@@ -227,6 +256,17 @@ export function FleetTrips() {
                       <span className="d-predict">
                         Late risk {Math.round(stop.lateRiskPercent)}%
                       </span>
+                    )}
+                    {/* A published stop that has not left the depot can still move or be deferred. */}
+                    {published && trip.status !== undefined && OPEN_TRIPS.includes(trip.status) && (
+                      <Button
+                        variant="secondary"
+                        size="md"
+                        aria-label={`Move or defer ${stop.name}`}
+                        onClick={() => setChanging({ orderId: stop.orderId, name: stop.name })}
+                      >
+                        Change
+                      </Button>
                     )}
                   </li>
                 ))}

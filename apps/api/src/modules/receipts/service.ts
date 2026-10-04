@@ -1,5 +1,12 @@
 import type { Database } from '@waypoint/database';
-import type { CreateIssueRequest, Issue, IssueListResponse, Receipt, User } from '@waypoint/shared';
+import type {
+  CreateIssueRequest,
+  Issue,
+  IssueListResponse,
+  Receipt,
+  ResolveIssueRequest,
+  User,
+} from '@waypoint/shared';
 import { notificationPriorityByType, orderStateMachine } from '@waypoint/shared';
 import type { AuditRecorder } from '../../plugins/audit.ts';
 import type { OperatingClock } from '../../plugins/clock.ts';
@@ -13,6 +20,7 @@ const MISSING_STOP = 'Stop not found';
 const MISSING_ORDER = 'Order not found';
 const MISSING_ISSUE = 'Issue not found';
 const ISSUE_BEFORE_DELIVERY = 'An issue can only be reported for a delivered order';
+const ALREADY_RESOLVED = 'This issue is already resolved';
 const NOT_DELIVERED = 'Only a delivered stop can be receipt-confirmed';
 
 interface ConfirmedReceipt {
@@ -25,6 +33,7 @@ export interface ReceiptService {
   createIssue(user: User | null, input: CreateIssueRequest): Promise<Issue>;
   listIssues(user: User | null): Promise<IssueListResponse>;
   getIssue(user: User | null, issueId: string): Promise<Issue>;
+  resolveIssue(user: User | null, issueId: string, input: ResolveIssueRequest): Promise<Issue>;
 }
 
 export function createReceiptService(
@@ -175,6 +184,72 @@ export function createReceiptService(
       if (row === null) throw new ApiError('NOT_FOUND', MISSING_ISSUE);
       return toIssue(row);
     },
+
+    // SYSTEM_DESIGN §9.2: the dispatcher reads and resolves store issues. The store manager sees
+    // the outcome on the issue and gets a notice.
+    async resolveIssue(user, issueId, input) {
+      if (user === null) throw new ApiError('UNAUTHENTICATED', 'Sign in required');
+      if (user.role !== 'dispatcher') {
+        throw new ApiError('FORBIDDEN', 'You do not have access to this action');
+      }
+      const pending: StoreDomainEvent[] = [];
+      const issue = await db.transaction(async (tx) => {
+        const current = await repo.lockIssue(tx, scope(user).orders, issueId);
+        if (current === null) throw new ApiError('NOT_FOUND', MISSING_ISSUE);
+        if (current.status === 'resolved') {
+          throw new ApiError('CONSTRAINT_VIOLATION', ALREADY_RESOLVED);
+        }
+        const now = clock.now();
+        const saved = await repo.resolveIssue(tx, issueId, {
+          by: user.id,
+          at: now,
+          note: input.resolution,
+        });
+        if (saved === null) throw new ApiError('CONSTRAINT_VIOLATION', ALREADY_RESOLVED);
+        const managers = await repo.listStoreManagers(tx, current.outletId);
+        await repo.insertNotifications(
+          tx,
+          managers.map((manager) => ({
+            recipientId: manager.id,
+            type: 'issue_resolved',
+            priority: notificationPriorityByType.issue_resolved,
+            entityType: 'issue',
+            entityId: saved.id,
+            createdAt: now,
+          })),
+        );
+        const resolvedAt = formatColomboTimestamp(now);
+        await audit.record(tx, {
+          actorId: user.id,
+          role: user.role,
+          action: 'issue.resolved',
+          entityType: 'issue',
+          entityId: saved.id,
+          before: { status: 'open' },
+          after: {
+            orderId: saved.orderId,
+            status: 'resolved',
+            resolution: input.resolution,
+            resolvedBy: user.id,
+            resolvedAt,
+          },
+          createdAt: now,
+        });
+        pending.push({
+          type: 'issue.resolved',
+          actorId: user.id,
+          occurredAt: resolvedAt,
+          issueId: saved.id,
+          orderId: saved.orderId,
+          outletId: current.outletId,
+          depotId: current.depotId,
+          stopId: null,
+        });
+        return toIssue(saved);
+      });
+      publish(events, pending);
+      return issue;
+    },
   };
 }
 
@@ -212,6 +287,9 @@ function toIssue(row: IssueRow): Issue {
     status: row.status,
     createdBy: row.createdBy,
     createdAt: formatColomboTimestamp(row.createdAt),
+    resolvedBy: row.resolvedBy,
+    resolvedAt: row.resolvedAt === null ? null : formatColomboTimestamp(row.resolvedAt),
+    resolution: row.resolution,
   };
 }
 

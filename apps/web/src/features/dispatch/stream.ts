@@ -46,6 +46,7 @@ const scopes: Record<DashboardStreamEventType, readonly Scope[]> = {
   'stop.delivered': ['trips', 'dashboard'],
   'stop.failed': ['trips', 'dashboard', 'notifications'],
   'stop.pod_recorded': ['trips', 'dashboard'],
+  'issue.resolved': ['dashboard', 'notifications'],
   'receipt.confirmed': ['dashboard', 'notifications'],
   'issue.reported': ['dashboard', 'notifications'],
   'sync.conflict': ['trips', 'dashboard', 'notifications'],

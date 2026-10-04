@@ -21,6 +21,7 @@ export const notificationPriorityByType = {
   delivered: 'info',
   receipt_discrepancy: 'high',
   sync_conflict: 'medium',
+  issue_resolved: 'info',
 } as const satisfies Record<NotificationType, NotificationPriority>;
 
 export const notificationSchema = z.object({

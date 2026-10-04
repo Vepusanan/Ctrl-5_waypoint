@@ -75,6 +75,16 @@ export interface OrderSizeRecord {
   volumeM3: number;
 }
 
+/** One day's demand for a depot and brand, from the order history (requested date). */
+export interface DemandHistoryRecord {
+  date: string;
+  depotId: string;
+  brand: Brand;
+  orders: number;
+  volumeM3: number;
+  chilledVolumeM3: number;
+}
+
 type ReferenceSource = 'dataset' | 'synthetic';
 
 export interface ReferenceData {
@@ -86,4 +96,5 @@ export interface ReferenceData {
   districtTravel: DistrictTravelRecord[];
   serviceAllowances: ServiceAllowanceRecord[];
   orderSizes: OrderSizeRecord[];
+  demandHistory: DemandHistoryRecord[];
 }
